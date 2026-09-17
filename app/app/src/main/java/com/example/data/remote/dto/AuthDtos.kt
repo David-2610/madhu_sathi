@@ -9,7 +9,7 @@ data class RegisterRequest(
     @Json(name = "password") val password: String,
     @Json(name = "full_name") val fullName: String,
     @Json(name = "role") val role: String, // BUYER or BEEKEEPER
-    @Json(name = "phone_number") val phoneNumber: String? = null
+    @Json(name = "phone") val phoneNumber: String
 )
 
 @JsonClass(generateAdapter = true)
@@ -30,7 +30,7 @@ data class UserDto(
     @Json(name = "email") val email: String,
     @Json(name = "full_name") val fullName: String,
     @Json(name = "role") val role: String,
-    @Json(name = "phone_number") val phoneNumber: String? = null,
+    @Json(name = "phone") val phoneNumber: String,
     @Json(name = "created_at") val createdAt: String? = null
 )
 

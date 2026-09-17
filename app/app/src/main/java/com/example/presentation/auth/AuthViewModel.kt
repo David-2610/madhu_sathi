@@ -69,7 +69,7 @@ class AuthViewModel(
         pass: String,
         fullName: String,
         role: String,
-        phone: String?,
+        phone: String,
         onSuccess: () -> Unit
     ) {
         val emailTrimmed = email.trim()
@@ -85,6 +85,10 @@ class AuthViewModel(
         if (nameTrimmed.isBlank()) {
             errors["fullName"] = "Please enter your full name"
         }
+        val phoneTrimmed = phone.trim()
+        if (phoneTrimmed.isBlank() || !phoneTrimmed.matches(Regex("^\\d{10}$"))) {
+            errors["phone"] = "Phone number must be exactly 10 digits"
+        }
 
         if (errors.isNotEmpty()) {
             _uiState.value = AuthUiState(fieldErrors = errors)
@@ -93,7 +97,7 @@ class AuthViewModel(
 
         viewModelScope.launch {
             _uiState.value = AuthUiState(isLoading = true)
-            when (val res = authRepository.register(emailTrimmed, pass, nameTrimmed, role, phone)) {
+            when (val res = authRepository.register(emailTrimmed, pass, nameTrimmed, role, phoneTrimmed)) {
                 is ApiResult.Success -> {
                     _uiState.value = AuthUiState(isSuccess = true)
                     onSuccess()

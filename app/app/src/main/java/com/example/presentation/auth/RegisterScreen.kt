@@ -232,8 +232,10 @@ fun RegisterScreen(
                     phone = it
                     viewModel.clearErrors()
                 },
-                label = "Phone Number (Optional)",
-                placeholder = "+91 9876543210",
+                label = "Phone Number",
+                placeholder = "9876543210",
+                isError = uiState.fieldErrors.containsKey("phone"),
+                errorMessage = uiState.fieldErrors["phone"],
                 leadingIcon = Icons.Default.Phone,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Phone,

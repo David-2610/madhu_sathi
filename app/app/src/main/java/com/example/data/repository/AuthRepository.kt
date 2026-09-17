@@ -40,7 +40,7 @@ class AuthRepository(
         password: String,
         fullName: String,
         role: String,
-        phoneNumber: String? = null
+        phoneNumber: String
     ): ApiResult<UserDto> = withContext(Dispatchers.IO) {
         val url = "${sessionManager.getBackendUrlSync()}auth/register"
         android.util.Log.d("HoneyChainAuth", "--> POST $url (role=$role)")
@@ -50,7 +50,7 @@ class AuthRepository(
                 password = password,
                 fullName = fullName.trim(),
                 role = role.uppercase(),
-                phoneNumber = phoneNumber?.trim()?.ifBlank { null }
+                phoneNumber = phoneNumber.trim()
             )
             val user = apiService.register(request)
             android.util.Log.d("HoneyChainAuth", "<-- 200 Registration successful: id=${user.id}")

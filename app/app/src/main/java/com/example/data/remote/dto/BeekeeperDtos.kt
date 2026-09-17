@@ -8,7 +8,7 @@ data class BeekeeperProfileDto(
     @Json(name = "id") val id: String? = null,
     @Json(name = "user_id") val userId: String? = null,
     @Json(name = "full_name") val fullName: String? = null,
-    @Json(name = "phone_number") val phoneNumber: String? = null,
+    @Json(name = "phone") val phoneNumber: String? = null,
     @Json(name = "experience_years") val experienceYears: Int? = 0,
     @Json(name = "state") val state: String? = null,
     @Json(name = "district") val district: String? = null,

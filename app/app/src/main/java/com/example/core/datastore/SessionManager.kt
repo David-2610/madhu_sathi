@@ -66,11 +66,9 @@ class SessionManager(private val context: Context) {
     }
 
     fun getAccessTokenSync(): String? {
-        return cachedAccessToken ?: try {
-            runBlocking { context.dataStore.data.first()[KEY_ACCESS_TOKEN] }
-        } catch (_: Exception) {
-            null
-        }
+        // Return the in-memory cache populated by the background collect() in init.
+        // Using runBlocking here can deadlock against that collect() on Dispatchers.IO.
+        return cachedAccessToken
     }
 
     fun getBackendUrlSync(): String {
