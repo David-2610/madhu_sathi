@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+        windowBackground is set to match HoneyBgLight (0xFFFDFBF7, "Warm Linen").
+        This is the color the OS displays BEFORE Compose renders its first frame.
+        Without this, the DeviceDefault theme defaults to black, causing the black-screen flash on launch.
+    -->
+    <style name="Theme.MyApplication" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">#FDFBF7</item>
+    </style>
+
+</resources>
