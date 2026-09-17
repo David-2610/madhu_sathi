@@ -20,7 +20,7 @@ import com.example.presentation.beekeeper.BeekeeperShellScreen
 import com.example.presentation.beekeeper.BeekeeperViewModel
 import com.example.presentation.buyer.BuyerShellScreen
 import com.example.presentation.buyer.BuyerViewModel
-import com.example.presentation.settings.BackendConfigDialog
+
 import com.example.presentation.trace.QrTraceScannerScreen
 import com.example.presentation.trace.TraceViewModel
 
@@ -42,18 +42,7 @@ fun MainRootScreen(
 
     var isRegistering by remember { mutableStateOf(false) }
 
-    // Backend URL Configuration Dialog (Accessible anywhere across the app!)
-    if (mainUiState.showBackendConfig) {
-        BackendConfigDialog(
-            currentUrl = mainUiState.backendUrl,
-            authRepository = app.authRepository,
-            onDismiss = { mainViewModel.setBackendConfigDialog(false) },
-            onSaved = {
-                mainViewModel.setBackendConfigDialog(false)
-                mainViewModel.checkAuthentication()
-            }
-        )
-    }
+
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -91,8 +80,7 @@ fun MainRootScreen(
                         } else {
                             LoginScreen(
                                 viewModel = authViewModel,
-                                backendUrl = mainUiState.backendUrl,
-                                onOpenBackendConfig = { mainViewModel.setBackendConfigDialog(true) },
+
                                 onNavigateToRegister = { isRegistering = true },
                                 onNavigateToPublicTrace = { mainViewModel.setPublicTraceActive(true) },
                                 onLoginSuccess = { role ->
@@ -109,8 +97,7 @@ fun MainRootScreen(
                                     buyerViewModel = buyerViewModel,
                                     traceViewModel = traceViewModel,
                                     userProfile = state.userProfile,
-                                    backendUrl = mainUiState.backendUrl,
-                                    onOpenBackendConfig = { mainViewModel.setBackendConfigDialog(true) },
+
                                     onLogout = { mainViewModel.logout() }
                                 )
                             }
@@ -119,8 +106,7 @@ fun MainRootScreen(
                                 BeekeeperShellScreen(
                                     viewModel = beekeeperViewModel,
                                     userProfile = state.userProfile,
-                                    backendUrl = mainUiState.backendUrl,
-                                    onOpenBackendConfig = { mainViewModel.setBackendConfigDialog(true) },
+
                                     onLogout = { mainViewModel.logout() }
                                 )
                             }
@@ -130,8 +116,7 @@ fun MainRootScreen(
                                     adminViewModel = adminViewModel,
                                     traceViewModel = traceViewModel,
                                     userProfile = state.userProfile,
-                                    backendUrl = mainUiState.backendUrl,
-                                    onOpenBackendConfig = { mainViewModel.setBackendConfigDialog(true) },
+
                                     onLogout = { mainViewModel.logout() }
                                 )
                             }

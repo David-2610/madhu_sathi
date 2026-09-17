@@ -18,8 +18,6 @@ fun BuyerShellScreen(
     buyerViewModel: BuyerViewModel,
     traceViewModel: TraceViewModel,
     userProfile: UserProfileEntity?,
-    backendUrl: String,
-    onOpenBackendConfig: () -> Unit,
     onLogout: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -44,11 +42,7 @@ fun BuyerShellScreen(
                     else -> "Buyer Profile"
                 },
                 subtitle = "Pure Khadi Honey Direct From Apiaries",
-                actions = {
-                    IconButton(onClick = onOpenBackendConfig) {
-                        Icon(Icons.Default.Dns, contentDescription = "Configure Backend")
-                    }
-                }
+
             )
         },
         bottomBar = {
@@ -102,8 +96,6 @@ fun BuyerShellScreen(
                 )
                 4 -> BuyerProfileScreen(
                     userProfile = userProfile,
-                    backendUrl = backendUrl,
-                    onOpenBackendConfig = onOpenBackendConfig,
                     onLogout = onLogout
                 )
             }

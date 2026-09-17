@@ -18,8 +18,6 @@ sealed interface AuthState {
 
 data class MainUiState(
     val authState: AuthState = AuthState.Loading,
-    val backendUrl: String = "http://10.0.2.2:8000/",
-    val showBackendConfig: Boolean = false,
     val isPublicTraceActive: Boolean = false
 )
 
@@ -31,13 +29,6 @@ class MainViewModel(
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
     init {
-        // Collect backend URL changes
-        viewModelScope.launch {
-            authRepository.backendUrlFlow.collect { url ->
-                _uiState.value = _uiState.value.copy(backendUrl = url)
-            }
-        }
-
         checkAuthentication()
     }
 
@@ -125,10 +116,6 @@ class MainViewModel(
                 isPublicTraceActive = false
             )
         }
-    }
-
-    fun setBackendConfigDialog(show: Boolean) {
-        _uiState.value = _uiState.value.copy(showBackendConfig = show)
     }
 
     fun setPublicTraceActive(active: Boolean) {

@@ -74,56 +74,6 @@ fun RegisterScreen(
                 modifier = Modifier.align(Alignment.Start)
             )
 
-            // Connectivity Test Widget before registration
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = when (uiState.healthSuccess) {
-                    true -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                    false -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                    else -> MaterialTheme.colorScheme.surfaceVariant
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Server Health (GET /health)",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = uiState.healthStatus ?: "Tap refresh to ping /health",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = when (uiState.healthSuccess) {
-                                true -> MaterialTheme.colorScheme.primary
-                                false -> MaterialTheme.colorScheme.error
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-                        )
-                    }
-                    IconButton(
-                        onClick = { viewModel.testHealthConnection() },
-                        enabled = !uiState.isHealthTesting,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        if (uiState.isHealthTesting) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Test GET /health",
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                }
-            }
 
             // Role selection segment
             Text(

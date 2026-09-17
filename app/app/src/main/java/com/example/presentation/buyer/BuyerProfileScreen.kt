@@ -23,8 +23,6 @@ import com.example.data.sync.HoneyChainSyncWorker
 @Composable
 fun BuyerProfileScreen(
     userProfile: UserProfileEntity?,
-    backendUrl: String,
-    onOpenBackendConfig: () -> Unit,
     onLogout: () -> Unit
 ) {
     val context = LocalContext.current
@@ -80,51 +78,6 @@ fun BuyerProfileScreen(
             }
         }
 
-        // Settings & Actions
-        Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = "Preferences & Diagnostics",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-
-                OutlinedButton(
-                    onClick = onOpenBackendConfig,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Icon(Icons.Default.Dns, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Backend Server: ${backendUrl.removePrefix("http://")}")
-                }
-
-                OutlinedButton(
-                    onClick = {
-                        HoneyChainSyncWorker.triggerOneTimeSync(context)
-                        syncMessage = "Background synchronization triggered"
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Sync Cached Data (Room / WorkManager)")
-                }
-
-                if (syncMessage != null) {
-                    Text(
-                        text = syncMessage.orEmpty(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        }
 
         // Honey Trust Standard Card
         Card(

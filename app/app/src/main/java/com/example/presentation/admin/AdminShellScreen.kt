@@ -26,8 +26,6 @@ fun AdminShellScreen(
     adminViewModel: AdminViewModel,
     traceViewModel: TraceViewModel,
     userProfile: UserProfileEntity?,
-    backendUrl: String,
-    onOpenBackendConfig: () -> Unit,
     onLogout: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -51,11 +49,7 @@ fun AdminShellScreen(
                     else -> "Admin Settings"
                 },
                 subtitle = "Khadi & Village Industries Commission Quality Enforcement",
-                actions = {
-                    IconButton(onClick = onOpenBackendConfig) {
-                        Icon(Icons.Default.Dns, contentDescription = "Configure Backend")
-                    }
-                }
+
             )
         },
         bottomBar = {
@@ -99,9 +93,6 @@ fun AdminShellScreen(
                 1 -> QrTraceScannerScreen(viewModel = traceViewModel, canNavigateBack = false)
                 2 -> AdminSettingsView(
                     userProfile = userProfile,
-                    backendUrl = backendUrl,
-                    healthStatus = uiState.healthCheck?.status ?: "Unknown",
-                    onOpenBackendConfig = onOpenBackendConfig,
                     onLogout = onLogout
                 )
             }
@@ -131,12 +122,6 @@ private fun AdminAuditView(
                 title = "Audited Jars",
                 value = "${uiState.products.size}",
                 icon = Icons.Default.Inventory2,
-                modifier = Modifier.weight(1f)
-            )
-            StatCard(
-                title = "Backend Service",
-                value = uiState.healthCheck?.status?.uppercase() ?: "ONLINE",
-                icon = Icons.Default.Dns,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -255,9 +240,6 @@ private fun AdminProductAuditCard(
 @Composable
 private fun AdminSettingsView(
     userProfile: UserProfileEntity?,
-    backendUrl: String,
-    healthStatus: String,
-    onOpenBackendConfig: () -> Unit,
     onLogout: () -> Unit
 ) {
     Column(
@@ -287,24 +269,7 @@ private fun AdminSettingsView(
             }
         }
 
-        Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(text = "Server & Infrastructure", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                OutlinedButton(
-                    onClick = onOpenBackendConfig,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Icon(Icons.Default.Dns, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Base URL: ${backendUrl.removePrefix("http://")}")
-                }
-            }
-        }
+
 
         Button(
             onClick = onLogout,

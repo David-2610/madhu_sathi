@@ -25,11 +25,7 @@ class SessionManager(private val context: Context) {
         val KEY_USER_EMAIL = stringPreferencesKey("user_email")
         val KEY_USER_NAME = stringPreferencesKey("user_name")
         val KEY_USER_ROLE = stringPreferencesKey("user_role")
-        val KEY_BACKEND_URL = stringPreferencesKey("backend_url")
     }
-
-    @Volatile
-    private var cachedBackendUrl: String = BuildConfig.BACKEND_BASE_URL
 
     @Volatile
     private var cachedAccessToken: String? = null
@@ -38,7 +34,6 @@ class SessionManager(private val context: Context) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 context.dataStore.data.collect { prefs ->
-                    cachedBackendUrl = prefs[KEY_BACKEND_URL] ?: BuildConfig.BACKEND_BASE_URL
                     cachedAccessToken = prefs[KEY_ACCESS_TOKEN]
                 }
             } catch (_: Exception) {}
@@ -61,9 +56,7 @@ class SessionManager(private val context: Context) {
         prefs[KEY_USER_EMAIL]
     }
 
-    val backendUrlFlow: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_BACKEND_URL] ?: BuildConfig.BACKEND_BASE_URL
-    }
+
 
     fun getAccessTokenSync(): String? {
         // Return the in-memory cache populated by the background collect() in init.
@@ -71,9 +64,7 @@ class SessionManager(private val context: Context) {
         return cachedAccessToken
     }
 
-    fun getBackendUrlSync(): String {
-        return cachedBackendUrl
-    }
+
 
     suspend fun saveSession(
         token: String,
@@ -105,14 +96,7 @@ class SessionManager(private val context: Context) {
         }
     }
 
-    suspend fun setBackendUrl(url: String) {
-        val trimmed = url.trim()
-        val normalized = if (trimmed.endsWith("/")) trimmed else "$trimmed/"
-        cachedBackendUrl = normalized
-        context.dataStore.edit { prefs ->
-            prefs[KEY_BACKEND_URL] = normalized
-        }
-    }
+
 
     suspend fun clearSession() {
         context.dataStore.edit { prefs ->

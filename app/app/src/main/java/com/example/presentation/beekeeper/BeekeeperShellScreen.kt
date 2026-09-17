@@ -15,8 +15,6 @@ import com.example.data.local.entity.UserProfileEntity
 fun BeekeeperShellScreen(
     viewModel: BeekeeperViewModel,
     userProfile: UserProfileEntity?,
-    backendUrl: String,
-    onOpenBackendConfig: () -> Unit,
     onLogout: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -61,11 +59,7 @@ fun BeekeeperShellScreen(
                     else -> "Beekeeper Profile"
                 },
                 subtitle = "Rural-Tech Smart Beekeeping",
-                actions = {
-                    IconButton(onClick = onOpenBackendConfig) {
-                        Icon(Icons.Default.Dns, contentDescription = "Configure Backend")
-                    }
-                }
+
             )
         },
         bottomBar = {
@@ -137,8 +131,6 @@ fun BeekeeperShellScreen(
                 5 -> BeekeeperProfileScreen(
                     viewModel = viewModel,
                     userProfile = userProfile,
-                    backendUrl = backendUrl,
-                    onOpenBackendConfig = onOpenBackendConfig,
                     onLogout = onLogout
                 )
             }

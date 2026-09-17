@@ -29,8 +29,7 @@ import com.example.core.ui.HoneyOutlinedTextField
 @Composable
 fun LoginScreen(
     viewModel: AuthViewModel,
-    backendUrl: String,
-    onOpenBackendConfig: () -> Unit,
+
     onNavigateToRegister: () -> Unit,
     onNavigateToPublicTrace: () -> Unit,
     onLoginSuccess: (role: String) -> Unit
@@ -62,24 +61,6 @@ fun LoginScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                FilterChip(
-                    selected = false,
-                    onClick = onOpenBackendConfig,
-                    label = {
-                        Text(
-                            text = backendUrl.removePrefix("http://").removeSuffix("/"),
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.SettingsEthernet,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                )
-
                 TextButton(onClick = onNavigateToPublicTrace) {
                     Icon(
                         imageVector = Icons.Default.QrCodeScanner,
@@ -92,57 +73,6 @@ fun LoginScreen(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
-
-            // FastAPI Connectivity Test Widget (GET /health)
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = when (uiState.healthSuccess) {
-                    true -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                    false -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                    else -> MaterialTheme.colorScheme.surfaceVariant
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Server Connectivity (GET /health)",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = uiState.healthStatus ?: "Probing $backendUrl...",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = when (uiState.healthSuccess) {
-                                true -> MaterialTheme.colorScheme.primary
-                                false -> MaterialTheme.colorScheme.error
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-                        )
-                    }
-                    IconButton(
-                        onClick = { viewModel.testHealthConnection() },
-                        enabled = !uiState.isHealthTesting,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        if (uiState.isHealthTesting) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Test GET /health",
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                }
-            }
 
             Spacer(modifier = Modifier.height(8.dp))
 

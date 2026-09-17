@@ -16,8 +16,7 @@ data class AdminUiState(
     val errorMessage: String? = null,
     val successMessage: String? = null,
     val products: List<ProductDto> = emptyList(),
-    val apiaries: List<ApiaryDto> = emptyList(),
-    val healthCheck: HealthResponse? = null
+    val apiaries: List<ApiaryDto> = emptyList()
 )
 
 class AdminViewModel(
@@ -38,11 +37,9 @@ class AdminViewModel(
             try {
                 // Fetch marketplace products to audit purity & compliance
                 val products = apiService.getMarketplaceProducts()
-                val health = try { apiService.checkHealth() } catch (e: Exception) { null }
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    products = products,
-                    healthCheck = health
+                    products = products
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(

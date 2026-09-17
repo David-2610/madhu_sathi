@@ -14,22 +14,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import java.util.concurrent.TimeUnit
 
-class DynamicBaseUrlInterceptor(private val sessionManager: SessionManager) : Interceptor {
-    override fun intercept(chain: Interceptor.Chain): Response {
-        val originalRequest = chain.request()
-        val customUrl = sessionManager.getBackendUrlSync().toHttpUrlOrNull()
-        if (customUrl != null) {
-            val newUrl = originalRequest.url.newBuilder()
-                .scheme(customUrl.scheme)
-                .host(customUrl.host)
-                .port(customUrl.port)
-                .build()
-            val newRequest = originalRequest.newBuilder().url(newUrl).build()
-            return chain.proceed(newRequest)
-        }
-        return chain.proceed(originalRequest)
-    }
-}
+
 
 class NetworkModule(
     private val sessionManager: SessionManager,
@@ -56,13 +41,12 @@ class NetworkModule(
         .readTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
-        .addInterceptor(DynamicBaseUrlInterceptor(sessionManager))
         .addInterceptor(AuthInterceptor(sessionManager, onUnauthorized))
         .addInterceptor(loggingInterceptor)
         .build()
 
     val apiService: HoneyChainApiService = Retrofit.Builder()
-        .baseUrl(sessionManager.getBackendUrlSync())
+        .baseUrl(BuildConfig.BACKEND_BASE_URL)
         .client(okHttpClient)
         .addConverterFactory(MoshiConverterFactory.create(moshi))
         .build()

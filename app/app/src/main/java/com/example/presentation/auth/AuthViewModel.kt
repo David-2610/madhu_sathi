@@ -13,10 +13,7 @@ data class AuthUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val fieldErrors: Map<String, String> = emptyMap(),
-    val isSuccess: Boolean = false,
-    val isHealthTesting: Boolean = false,
-    val healthStatus: String? = null,
-    val healthSuccess: Boolean? = null
+    val isSuccess: Boolean = false
 )
 
 class AuthViewModel(
@@ -113,42 +110,7 @@ class AuthViewModel(
         }
     }
 
-    init {
-        // Automatically probe /health on startup for development verification
-        testHealthConnection()
-    }
 
-    fun testHealthConnection(onResult: (Boolean, String) -> Unit = { _, _ -> }) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                isHealthTesting = true,
-                healthStatus = "Testing connection to /health...",
-                healthSuccess = null
-            )
-            when (val res = authRepository.checkHealth()) {
-                is ApiResult.Success -> {
-                    val status = res.data.status
-                    _uiState.value = _uiState.value.copy(
-                        isHealthTesting = false,
-                        healthStatus = "FastAPI 200 OK: {\"status\": \"$status\"}",
-                        healthSuccess = true
-                    )
-                    onResult(true, status)
-                }
-                is ApiResult.Error -> {
-                    _uiState.value = _uiState.value.copy(
-                        isHealthTesting = false,
-                        healthStatus = "Failed: ${res.message}",
-                        healthSuccess = false
-                    )
-                    onResult(false, res.message)
-                }
-                else -> {
-                    _uiState.value = _uiState.value.copy(isHealthTesting = false)
-                }
-            }
-        }
-    }
 
     fun clearErrors() {
         _uiState.value = _uiState.value.copy(errorMessage = null, fieldErrors = emptyMap())

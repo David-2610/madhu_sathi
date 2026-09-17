@@ -9,8 +9,6 @@ interface HoneyChainApiService {
     // ------------------------------------------
     // HEALTH
     // ------------------------------------------
-    @GET("health")
-    suspend fun checkHealth(): HealthResponse
 
     // ------------------------------------------
     // AUTHENTICATION

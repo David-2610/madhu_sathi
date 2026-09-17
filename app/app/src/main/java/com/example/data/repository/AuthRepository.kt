@@ -20,20 +20,7 @@ class AuthRepository(
     val currentUserProfile: Flow<UserProfileEntity?> = dao.getUserProfile()
     val userRoleFlow: Flow<String?> = sessionManager.userRoleFlow
     val accessTokenFlow: Flow<String?> = sessionManager.accessTokenFlow
-    val backendUrlFlow: Flow<String> = sessionManager.backendUrlFlow
 
-    suspend fun checkHealth(): ApiResult<HealthResponse> = withContext(Dispatchers.IO) {
-        val url = "${sessionManager.getBackendUrlSync()}health"
-        android.util.Log.d("HoneyChainHealth", "--> GET $url")
-        try {
-            val response = apiService.checkHealth()
-            android.util.Log.d("HoneyChainHealth", "<-- 200 {\"status\":\"${response.status}\"}")
-            ApiResult.Success(response)
-        } catch (e: Exception) {
-            android.util.Log.e("HoneyChainHealth", "<-- HTTP FAILED: ${e.javaClass.simpleName}: ${e.message}")
-            NetworkErrorMapper.map(e)
-        }
-    }
 
     suspend fun register(
         email: String,
@@ -42,8 +29,6 @@ class AuthRepository(
         role: String,
         phoneNumber: String
     ): ApiResult<UserDto> = withContext(Dispatchers.IO) {
-        val url = "${sessionManager.getBackendUrlSync()}auth/register"
-        android.util.Log.d("HoneyChainAuth", "--> POST $url (role=$role)")
         try {
             val request = RegisterRequest(
                 email = email.trim(),
@@ -135,7 +120,4 @@ class AuthRepository(
         dao.clearApiaries()
     }
 
-    suspend fun updateBackendUrl(url: String) {
-        sessionManager.setBackendUrl(url)
-    }
 }

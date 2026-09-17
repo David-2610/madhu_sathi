@@ -33,8 +33,3 @@ data class UserDto(
     @Json(name = "phone") val phoneNumber: String,
     @Json(name = "created_at") val createdAt: String? = null
 )
-
-@JsonClass(generateAdapter = true)
-data class HealthResponse(
-    @Json(name = "status") val status: String = "healthy"
-)
