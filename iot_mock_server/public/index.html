@@ -3,117 +3,152 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mock IoT Simulation Platform</title>
+  <title>MadhuSathi — IoT Hive Command Centre</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>🐝 Hive IoT Simulation Control</h1>
-      <div class="hive-controls">
-        <select id="hive-select" onchange="selectHive(this.value)">
-          <!-- Options populated dynamically -->
-        </select>
+
+  <div class="app-shell">
+
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="topbar-brand">
+        <span class="brand-icon">🐝</span>
+        <div>
+          <div class="brand-name">MadhuSathi</div>
+          <div class="brand-sub">IoT Hive Command Centre</div>
+        </div>
+      </div>
+
+      <div class="topbar-stats" id="global-stats">
+        <div class="stat-pill healthy-pill"><span id="stat-healthy">0</span> Healthy</div>
+        <div class="stat-pill warn-pill"><span id="stat-warning">0</span> Warning</div>
+        <div class="stat-pill crit-pill"><span id="stat-critical">0</span> Critical</div>
+        <div class="stat-pill total-pill"><span id="stat-total">0</span> Total</div>
+      </div>
+
+      <div class="topbar-actions">
         <div class="register-group">
-          <input type="text" id="new-hive-id" placeholder="HIVE_XXX">
-          <button onclick="registerHive()">Register Hive</button>
+          <input type="text" id="new-hive-id" placeholder="HIVE_XXX" maxlength="20">
+          <button id="btn-register" onclick="registerHive()">+ Register</button>
         </div>
       </div>
     </header>
 
-    <main class="dashboard">
-      <!-- Live Status Section -->
-      <section class="panel live-data">
-        <h2>Live Dashboard</h2>
-        <div class="status-header">
-          <div>Status: <span id="status-badge" class="badge">Loading...</span></div>
-          <div>Activity: <span id="activity-badge" class="badge">Loading...</span></div>
+    <!-- Global Bulk Action Bar -->
+    <div class="bulk-bar">
+      <div class="bulk-bar-left">
+        <label class="bulk-title">Fleet Controls</label>
+        <div class="control-inline">
+          <label>Interval (ms):</label>
+          <input type="number" id="global-interval" value="2000" min="1000" step="500">
         </div>
-        
-        <div class="metrics">
-          <div class="metric">
-            <span class="label">Temperature</span>
-            <span class="value" id="val-temp">--</span> °C
-          </div>
-          <div class="metric">
-            <span class="label">Humidity</span>
-            <span class="value" id="val-hum">--</span> %
-          </div>
-          <div class="metric">
-            <span class="label">Weight</span>
-            <span class="value" id="val-weight">--</span> kg
-          </div>
-          <div class="metric">
-            <span class="label">Sound Level</span>
-            <span class="value" id="val-sound">--</span> dB
-          </div>
-          <div class="metric">
-            <span class="label">CO2 Level</span>
-            <span class="value" id="val-co2">--</span> ppm
-          </div>
-        </div>
-        <div class="timestamp">Last Update: <span id="val-timestamp">--</span></div>
-      </section>
+        <button class="btn-fleet btn-start" onclick="fleetSimulateAll()">Simulate ALL</button>
+        <button class="btn-fleet btn-stop" onclick="fleetStopAll()">Stop ALL</button>
+      </div>
+      <div class="bulk-bar-right">
+        <span class="scenario-label">Scenario to ALL:</span>
+        <button class="scen-btn scen-healthy" onclick="fleetScenario('healthy')">Healthy</button>
+        <button class="scen-btn scen-overheat" onclick="fleetScenario('overheating')">Overheat</button>
+        <button class="scen-btn scen-humid" onclick="fleetScenario('humidity')">Humidity</button>
+        <button class="scen-btn scen-stress" onclick="fleetScenario('stress')">Stress</button>
+        <button class="scen-btn scen-low" onclick="fleetScenario('low')">Low</button>
+        <button class="scen-btn scen-reset" onclick="fleetReset()">Reset ALL</button>
+      </div>
+    </div>
 
-      <!-- Scenario Control -->
-      <section class="panel scenarios">
-        <h2>Presets & Scenarios</h2>
-        <div class="button-grid">
-          <button onclick="setScenario('healthy')">Healthy</button>
-          <button onclick="setScenario('overheating')">Overheating</button>
-          <button onclick="setScenario('humidity')">High Humidity</button>
-          <button onclick="setScenario('stress')">Colony Stress</button>
-          <button onclick="setScenario('low')">Low Activity</button>
-        </div>
-        <div class="button-grid" style="margin-top: 15px;">
-          <button onclick="resetState()" class="btn-secondary">Reset to Default</button>
-        </div>
-      </section>
-
-      <!-- Simulation Engine -->
-      <section class="panel simulation">
-        <h2>Simulation Engine</h2>
-        <div class="control-group">
-          <label for="sim-interval">Interval (ms):</label>
-          <input type="number" id="sim-interval" value="2000" min="1000" step="500">
-        </div>
-        <div class="button-grid">
-          <button onclick="startSimulation()" class="btn-start">Start Auto-Stream</button>
-          <button onclick="stopSimulation()" class="btn-stop">Stop Stream</button>
-        </div>
-        <div class="button-grid" style="margin-top: 15px;">
-          <button onclick="startSimulationAll()" class="btn-start">Simulate ALL</button>
-          <button onclick="stopSimulationAll()" class="btn-stop">Stop ALL</button>
-        </div>
-      </section>
-
-      <!-- Manual Adjustments -->
-      <section class="panel manual">
-        <h2>Manual Override</h2>
-        
-        <div class="slider-group">
-          <label>Temperature (<span id="slide-val-temp">34</span> °C)</label>
-          <input type="range" id="slider-temp" min="0" max="60" step="0.5" value="34" oninput="updateValue('temperature', this.value)">
-        </div>
-        <div class="slider-group">
-          <label>Humidity (<span id="slide-val-hum">60</span> %)</label>
-          <input type="range" id="slider-hum" min="0" max="100" step="1" value="60" oninput="updateValue('humidity', this.value)">
-        </div>
-        <div class="slider-group">
-          <label>Weight (<span id="slide-val-weight">30</span> kg)</label>
-          <input type="range" id="slider-weight" min="1" max="100" step="0.5" value="30" oninput="updateValue('weight', this.value)">
-        </div>
-        <div class="slider-group">
-          <label>Sound Level (<span id="slide-val-sound">50</span> dB)</label>
-          <input type="range" id="slider-sound" min="0" max="120" step="1" value="50" oninput="updateValue('sound_level', this.value)">
-        </div>
-        <div class="slider-group">
-          <label>CO2 Level (<span id="slide-val-co2">700</span> ppm)</label>
-          <input type="range" id="slider-co2" min="300" max="2000" step="10" value="700" oninput="updateValue('co2_level', this.value)">
-        </div>
-      </section>
+    <!-- Hive Grid -->
+    <main class="hive-grid" id="hive-grid">
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">🍯</div>
+        <div>No hives registered yet. Add one above.</div>
+      </div>
     </main>
+
   </div>
+
+  <!-- Hive Detail Modal -->
+  <div class="modal-backdrop" id="modal-backdrop" onclick="closeModal()">
+    <div class="modal" id="modal" onclick="event.stopPropagation()">
+
+      <div class="modal-header">
+        <div>
+          <div class="modal-hive-id" id="modal-hive-id">HIVE_001</div>
+          <div class="modal-sub">Individual Hive Configuration</div>
+        </div>
+        <button class="modal-close" onclick="closeModal()">X</button>
+      </div>
+
+      <div class="modal-status-strip">
+        <div>Status: <span id="modal-status-badge" class="badge">Loading...</span></div>
+        <div>Activity: <span id="modal-activity-badge" class="badge">Loading...</span></div>
+        <div class="modal-timestamp">Updated: <span id="modal-timestamp">--</span></div>
+      </div>
+
+      <div class="modal-metrics">
+        <div class="metric-tile"><div class="metric-icon">Temp</div><div class="metric-val" id="m-temp">--</div><div class="metric-lbl">Celsius</div></div>
+        <div class="metric-tile"><div class="metric-icon">Humid</div><div class="metric-val" id="m-hum">--</div><div class="metric-lbl">Percent</div></div>
+        <div class="metric-tile"><div class="metric-icon">Weight</div><div class="metric-val" id="m-weight">--</div><div class="metric-lbl">kg</div></div>
+        <div class="metric-tile"><div class="metric-icon">Sound</div><div class="metric-val" id="m-sound">--</div><div class="metric-lbl">dB</div></div>
+        <div class="metric-tile"><div class="metric-icon">CO2</div><div class="metric-val" id="m-co2">--</div><div class="metric-lbl">ppm</div></div>
+      </div>
+
+      <div class="modal-body">
+        <section class="modal-section">
+          <h3>Presets and Scenarios</h3>
+          <div class="scen-grid">
+            <button class="scen-btn scen-healthy" onclick="modalScenario('healthy')">Healthy</button>
+            <button class="scen-btn scen-overheat" onclick="modalScenario('overheating')">Overheat</button>
+            <button class="scen-btn scen-humid" onclick="modalScenario('humidity')">High Humidity</button>
+            <button class="scen-btn scen-stress" onclick="modalScenario('stress')">Colony Stress</button>
+            <button class="scen-btn scen-low" onclick="modalScenario('low')">Low Activity</button>
+            <button class="scen-btn scen-reset" onclick="modalReset()">Reset Default</button>
+          </div>
+        </section>
+
+        <section class="modal-section">
+          <h3>Simulation Engine</h3>
+          <div class="sim-row">
+            <label>Interval (ms):
+              <input type="number" id="modal-sim-interval" value="2000" min="1000" step="500">
+            </label>
+            <button class="btn-start" onclick="modalStartSim()">Start</button>
+            <button class="btn-stop" onclick="modalStopSim()">Stop</button>
+          </div>
+          <div class="sim-status" id="modal-sim-status">Idle</div>
+        </section>
+
+        <section class="modal-section">
+          <h3>Manual Override</h3>
+          <div class="slider-group">
+            <label>Temperature (<span id="m-slide-val-temp">34</span> C)</label>
+            <input type="range" id="m-slider-temp" min="0" max="60" step="0.5" value="34" oninput="modalUpdateValue('temperature', this.value)">
+          </div>
+          <div class="slider-group">
+            <label>Humidity (<span id="m-slide-val-hum">60</span> %)</label>
+            <input type="range" id="m-slider-hum" min="0" max="100" step="1" value="60" oninput="modalUpdateValue('humidity', this.value)">
+          </div>
+          <div class="slider-group">
+            <label>Weight (<span id="m-slide-val-weight">30</span> kg)</label>
+            <input type="range" id="m-slider-weight" min="1" max="100" step="0.5" value="30" oninput="modalUpdateValue('weight', this.value)">
+          </div>
+          <div class="slider-group">
+            <label>Sound Level (<span id="m-slide-val-sound">50</span> dB)</label>
+            <input type="range" id="m-slider-sound" min="0" max="120" step="1" value="50" oninput="modalUpdateValue('sound_level', this.value)">
+          </div>
+          <div class="slider-group">
+            <label>CO2 Level (<span id="m-slide-val-co2">700</span> ppm)</label>
+            <input type="range" id="m-slider-co2" min="300" max="2000" step="10" value="700" oninput="modalUpdateValue('co2_level', this.value)">
+          </div>
+        </section>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
