@@ -59,7 +59,14 @@ fun BeekeeperShellScreen(
                     else -> "Beekeeper Profile"
                 },
                 subtitle = "Rural-Tech Smart Beekeeping",
-
+                canNavigateBack = (selectedTab == 1 && apiarySubTab == 1) || (selectedTab == 4 && learningSubTab == 1),
+                onNavigateBack = {
+                    if (selectedTab == 1 && apiarySubTab == 1) {
+                        apiarySubTab = 0
+                    } else if (selectedTab == 4 && learningSubTab == 1) {
+                        learningSubTab = 0
+                    }
+                }
             )
         },
         bottomBar = {
@@ -68,7 +75,12 @@ fun BeekeeperShellScreen(
                     val isSelected = selectedTab == index
                     NavigationBarItem(
                         selected = isSelected,
-                        onClick = { selectedTab = index },
+                        onClick = { 
+                            selectedTab = index 
+                            // Reset sub-tabs when switching main tabs
+                            if (index == 1) apiarySubTab = 0
+                            if (index == 4) learningSubTab = 0
+                        },
                         icon = {
                             if (index == 3 && uiState.alerts.any { !it.isResolved }) {
                                 BadgedBox(badge = {
