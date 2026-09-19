@@ -287,13 +287,43 @@ fun BeekeeperIoTScreen(
                                                 viewModel.setIotServerUrl(it)
                                             },
                                             label = "IoT Server Endpoint URL",
-                                            placeholder = "http://10.0.2.2:4000/"
+                                            placeholder = "https://iotmockserver.vercel.app/"
                                         )
                                         Text(
-                                            text = "Reads simulated hive telemetry from your local or hosted IoT server (e.g. Node.js server.js).",
+                                            text = "Reads live or simulated hive telemetry from your IoT mock server (https://iotmockserver.vercel.app/).",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
+                                    }
+                                }
+
+                                // Quick Mock Server Hive Channels
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(
+                                        text = "Target IoT Mock Server Channel:",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    LazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        val channels = listOf("1", "2", "3", "4", "5")
+                                        items(channels) { channelId ->
+                                            val isMatched = (activeHive.hiveCode.filter { it.isDigit() } == channelId) ||
+                                                    (activeHive.id == channelId)
+                                            FilterChip(
+                                                selected = isMatched,
+                                                onClick = {
+                                                    viewModel.fetchFromExternalIotServer(channelId)
+                                                },
+                                                label = { Text("Hive #$channelId") },
+                                                leadingIcon = {
+                                                    Icon(Icons.Default.Sensors, contentDescription = null, modifier = Modifier.size(14.dp))
+                                                }
+                                            )
+                                        }
                                     }
                                 }
 
@@ -302,8 +332,8 @@ fun BeekeeperIoTScreen(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     HoneyButton(
-                                        text = "Read from IoT Server",
-                                        onClick = { viewModel.fetchFromExternalIotServer(activeHive.id) },
+                                        text = "Read Hive ${activeHive.hiveCode} from IoT Server",
+                                        onClick = { viewModel.fetchFromExternalIotServer(activeHive.hiveCode.ifBlank { activeHive.id }) },
                                         isLoading = uiState.isLoading && uiState.externalIotStatus?.contains("Connecting") == true,
                                         icon = Icons.Default.Sync,
                                         modifier = Modifier.weight(1f)

@@ -42,7 +42,7 @@ data class BeekeeperUiState(
     val isSimulating: Boolean = false,
 
     // IoT Simulation & External IoT Server
-    val iotServerUrl: String = "http://10.0.2.2:4000/",
+    val iotServerUrl: String = "https://iotmockserver.vercel.app/",
     val isExternalIotConnected: Boolean = false,
     val externalIotStatus: String? = null,
     val isAutoStreaming: Boolean = false,
@@ -508,6 +508,9 @@ class BeekeeperViewModel(
         )
         if (hiveId != null) {
             submitTelemetry(hiveId, temp, hum, weight, sound, co2)
+            viewModelScope.launch {
+                beekeeperRepository.setScenarioOnExternalIotServer(_uiState.value.iotServerUrl, hiveId, scenario)
+            }
         }
     }
 
@@ -577,25 +580,32 @@ class BeekeeperViewModel(
         }
     }
 
-    fun fetchFromExternalIotServer(hiveId: String) {
+    fun fetchFromExternalIotServer(hiveId: String = "") {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, externalIotStatus = "Connecting to IoT Simulation Server...")
-            when (val res = beekeeperRepository.fetchFromExternalIotServer(_uiState.value.iotServerUrl)) {
+            val targetHive = hiveId.ifBlank {
+                _uiState.value.selectedHive?.hiveCode ?: _uiState.value.selectedHive?.id ?: "1"
+            }
+            _uiState.value = _uiState.value.copy(
+                isLoading = true,
+                externalIotStatus = "Connecting to IoT Simulation Server for Hive $targetHive..."
+            )
+            when (val res = beekeeperRepository.fetchFromExternalIotServer(_uiState.value.iotServerUrl, targetHive)) {
                 is ApiResult.Success -> {
                     val t = res.data
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isExternalIotConnected = true,
-                        externalIotStatus = "Connected to IoT Simulator Server",
+                        externalIotStatus = "Synced Hive $targetHive from IoT Server",
                         currentTemp = t.temperatureC,
                         currentHumidity = t.humidityPct,
                         currentWeight = t.weightKg,
                         currentSoundDb = t.soundLevelDb ?: 48.0,
                         currentCo2Ppm = t.co2Ppm ?: 650.0,
-                        successMessage = "Synced latest metrics from IoT Simulation Server!"
+                        successMessage = "Synced telemetry for Hive $targetHive from IoT Server!"
                     )
+                    val backendHiveId = _uiState.value.selectedHive?.id ?: targetHive
                     submitTelemetry(
-                        hiveId = hiveId,
+                        hiveId = backendHiveId,
                         temp = t.temperatureC,
                         humidity = t.humidityPct,
                         weight = t.weightKg,
@@ -624,30 +634,58 @@ class BeekeeperViewModel(
             streamPacketCount = 0
         )
         autoStreamJob = viewModelScope.launch {
+            val targetHive = hiveId.ifBlank {
+                _uiState.value.selectedHive?.hiveCode ?: _uiState.value.selectedHive?.id ?: "1"
+            }
             while (isActive && _uiState.value.isAutoStreaming) {
-                val jitterTemp = (_uiState.value.currentTemp + ((-5..5).random() * 0.1)).coerceIn(15.0, 48.0)
-                val jitterHum = (_uiState.value.currentHumidity + ((-10..10).random() * 0.2)).coerceIn(20.0, 99.0)
-                val jitterWeight = (_uiState.value.currentWeight + ((-2..2).random() * 0.05)).coerceIn(5.0, 60.0)
-                val jitterSound = (_uiState.value.currentSoundDb + ((-15..15).random() * 0.2)).coerceIn(10.0, 110.0)
-                val jitterCo2 = (_uiState.value.currentCo2Ppm + ((-20..20).random() * 2.0)).coerceIn(300.0, 2500.0)
+                // Poll from external IoT Server
+                val extRes = beekeeperRepository.fetchFromExternalIotServer(_uiState.value.iotServerUrl, targetHive)
+                if (extRes is ApiResult.Success) {
+                    val t = extRes.data
+                    _uiState.value = _uiState.value.copy(
+                        currentTemp = t.temperatureC,
+                        currentHumidity = t.humidityPct,
+                        currentWeight = t.weightKg,
+                        currentSoundDb = t.soundLevelDb ?: 48.0,
+                        currentCo2Ppm = t.co2Ppm ?: 650.0,
+                        streamPacketCount = _uiState.value.streamPacketCount + 1,
+                        isExternalIotConnected = true,
+                        externalIotStatus = "Streaming live telemetry for Hive $targetHive"
+                    )
+                    val backendHiveId = _uiState.value.selectedHive?.id ?: targetHive
+                    submitTelemetry(
+                        hiveId = backendHiveId,
+                        temp = t.temperatureC,
+                        humidity = t.humidityPct,
+                        weight = t.weightKg,
+                        soundDb = t.soundLevelDb ?: 48.0,
+                        co2Ppm = t.co2Ppm ?: 650.0
+                    )
+                } else {
+                    val jitterTemp = (_uiState.value.currentTemp + ((-5..5).random() * 0.1)).coerceIn(15.0, 48.0)
+                    val jitterHum = (_uiState.value.currentHumidity + ((-10..10).random() * 0.2)).coerceIn(20.0, 99.0)
+                    val jitterWeight = (_uiState.value.currentWeight + ((-2..2).random() * 0.05)).coerceIn(5.0, 60.0)
+                    val jitterSound = (_uiState.value.currentSoundDb + ((-15..15).random() * 0.2)).coerceIn(10.0, 110.0)
+                    val jitterCo2 = (_uiState.value.currentCo2Ppm + ((-20..20).random() * 2.0)).coerceIn(300.0, 2500.0)
 
-                _uiState.value = _uiState.value.copy(
-                    currentTemp = Math.round(jitterTemp * 10.0) / 10.0,
-                    currentHumidity = Math.round(jitterHum * 10.0) / 10.0,
-                    currentWeight = Math.round(jitterWeight * 100.0) / 100.0,
-                    currentSoundDb = Math.round(jitterSound * 10.0) / 10.0,
-                    currentCo2Ppm = Math.round(jitterCo2).toDouble(),
-                    streamPacketCount = _uiState.value.streamPacketCount + 1
-                )
+                    _uiState.value = _uiState.value.copy(
+                        currentTemp = Math.round(jitterTemp * 10.0) / 10.0,
+                        currentHumidity = Math.round(jitterHum * 10.0) / 10.0,
+                        currentWeight = Math.round(jitterWeight * 100.0) / 100.0,
+                        currentSoundDb = Math.round(jitterSound * 10.0) / 10.0,
+                        currentCo2Ppm = Math.round(jitterCo2).toDouble(),
+                        streamPacketCount = _uiState.value.streamPacketCount + 1
+                    )
 
-                submitTelemetry(
-                    hiveId = hiveId,
-                    temp = _uiState.value.currentTemp,
-                    humidity = _uiState.value.currentHumidity,
-                    weight = _uiState.value.currentWeight,
-                    soundDb = _uiState.value.currentSoundDb,
-                    co2Ppm = _uiState.value.currentCo2Ppm
-                )
+                    submitTelemetry(
+                        hiveId = targetHive,
+                        temp = _uiState.value.currentTemp,
+                        humidity = _uiState.value.currentHumidity,
+                        weight = _uiState.value.currentWeight,
+                        soundDb = _uiState.value.currentSoundDb,
+                        co2Ppm = _uiState.value.currentCo2Ppm
+                    )
+                }
 
                 delay(intervalMs)
             }

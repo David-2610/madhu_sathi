@@ -11,12 +11,32 @@ import com.example.data.remote.dto.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class BeekeeperRepository(
     private val apiService: HoneyChainApiService,
     private val dao: HoneyChainDao,
     private val okHttpClient: okhttp3.OkHttpClient = okhttp3.OkHttpClient()
 ) {
+
+    private val cookieStore = java.util.concurrent.ConcurrentHashMap<String, List<okhttp3.Cookie>>()
+    private val cookieJar = object : okhttp3.CookieJar {
+        override fun saveFromResponse(url: okhttp3.HttpUrl, cookies: List<okhttp3.Cookie>) {
+            cookieStore[url.host] = cookies
+        }
+        override fun loadForRequest(url: okhttp3.HttpUrl): List<okhttp3.Cookie> {
+            return cookieStore[url.host] ?: emptyList()
+        }
+    }
+
+    private val iotClient: okhttp3.OkHttpClient by lazy {
+        okHttpClient.newBuilder()
+            .cookieJar(cookieJar)
+            .connectTimeout(12, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(12, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+    }
 
     val cachedApiaries: Flow<List<ApiaryEntity>> = dao.getAllApiaries()
 
@@ -192,7 +212,12 @@ class BeekeeperRepository(
         notes: String?
     ): ApiResult<HarvestDto> = withContext(Dispatchers.IO) {
         try {
-            val request = CreateHarvestRequest(date, quantityKg, moisturePct, flora, notes)
+            val request = CreateHarvestRequest(
+                harvestDate = date,
+                actualQuantityKg = quantityKg,
+                honeyType = flora ?: "Multiflora Honey",
+                notes = notes
+            )
             val result = apiService.createHarvest(hiveId, request)
             ApiResult.Success(result)
         } catch (e: Exception) {
@@ -201,10 +226,13 @@ class BeekeeperRepository(
     }
 
     // Batches
-    suspend fun fetchBatches(harvestId: String): ApiResult<List<BatchDto>> = withContext(Dispatchers.IO) {
+    suspend fun fetchBatches(harvestId: String? = null): ApiResult<List<BatchDto>> = withContext(Dispatchers.IO) {
         try {
-            val list = apiService.getBatchesForHarvest(harvestId)
-            ApiResult.Success(list)
+            val list = apiService.getBatchesForHarvest()
+            val filtered = if (!harvestId.isNullOrBlank()) {
+                list.filter { it.harvestId == harvestId }
+            } else list
+            ApiResult.Success(filtered)
         } catch (e: Exception) {
             NetworkErrorMapper.map(e)
         }
@@ -218,7 +246,13 @@ class BeekeeperRepository(
         grade: String
     ): ApiResult<BatchDto> = withContext(Dispatchers.IO) {
         try {
-            val request = CreateBatchRequest(batchNumber, totalKg, flora, grade)
+            val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+            val request = CreateBatchRequest(
+                batchCode = batchNumber,
+                batchDate = today,
+                quantityKg = totalKg,
+                honeyType = flora ?: "Multiflora Honey"
+            )
             val result = apiService.createBatch(harvestId, request)
             ApiResult.Success(result)
         } catch (e: Exception) {
@@ -244,7 +278,15 @@ class BeekeeperRepository(
         price: Double
     ): ApiResult<ProductDto> = withContext(Dispatchers.IO) {
         try {
-            val request = CreateProductRequest(title, description, jarSize, price)
+            val now = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+            val expiry = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(System.currentTimeMillis() + 365L * 24 * 3600 * 1000))
+            val serial = "JAR-${batchId.takeLast(4)}-${System.currentTimeMillis() % 10000}"
+            val request = CreateProductRequest(
+                netWeightG = jarSize.toDouble(),
+                packagingDate = now,
+                expiryDate = expiry,
+                serialNumber = serial
+            )
             val result = apiService.createProduct(batchId, request)
             ApiResult.Success(result)
         } catch (e: Exception) {
@@ -260,7 +302,17 @@ class BeekeeperRepository(
         location: String?
     ): ApiResult<ProductEventDto> = withContext(Dispatchers.IO) {
         try {
-            val request = CreateProductEventRequest(eventType, eventTitle, description, location)
+            val validTypes = listOf(
+                "HARVESTED", "COLD_FILTERED", "QUALITY_TESTED",
+                "PACKAGED", "WAREHOUSE_RECEIVED", "DISPATCHED", "DELIVERED", "VERIFIED"
+            )
+            val normalizedType = if (eventType.uppercase() in validTypes) eventType.uppercase() else "QUALITY_TESTED"
+            val desc = description?.ifBlank { null } ?: eventTitle
+            val request = CreateProductEventRequest(
+                eventType = normalizedType,
+                description = desc,
+                location = location
+            )
             val result = apiService.addProductEvent(productId, request)
             ApiResult.Success(result)
         } catch (e: Exception) {
@@ -293,7 +345,14 @@ class BeekeeperRepository(
         stock: Int? = null
     ): ApiResult<ProductListingDto> = withContext(Dispatchers.IO) {
         try {
-            val result = apiService.updateProductListing(productId, UpdateListingRequest(isListed, price, stock))
+            val result = apiService.updateProductListing(
+                productId,
+                UpdateListingRequest(
+                    price = price ?: 450.0,
+                    isListed = isListed,
+                    currency = "INR"
+                )
+            )
             ApiResult.Success(result)
         } catch (e: Exception) {
             NetworkErrorMapper.map(e)
@@ -313,11 +372,13 @@ class BeekeeperRepository(
         try {
             val request = TelemetryRequest(
                 temperatureC = temperatureC,
-                humidityPct = humidityPct,
+                humidityPercent = humidityPct,
                 weightKg = weightKg,
-                soundFrequencyHz = soundHz,
-                soundLevelDb = soundLevelDb,
-                co2Ppm = co2Ppm
+                soundLevel = soundLevelDb ?: 48.0,
+                vibrationLevel = 0.5,
+                batteryPercent = 95.0,
+                deviceId = null,
+                timestamp = null
             )
             val result = apiService.submitTelemetry(hiveId, request)
             ApiResult.Success(result)
@@ -332,38 +393,241 @@ class BeekeeperRepository(
         }
     }
 
-    suspend fun fetchFromExternalIotServer(url: String): ApiResult<TelemetryRequest> = withContext(Dispatchers.IO) {
+    suspend fun fetchFromExternalIotServer(
+        url: String,
+        hiveId: String = "1"
+    ): ApiResult<TelemetryRequest> = withContext(Dispatchers.IO) {
         try {
-            val cleanUrl = if (!url.startsWith("http://") && !url.startsWith("https://")) "http://$url" else url
-            val targetUrl = if (cleanUrl.endsWith("/")) "${cleanUrl}api/telemetry" else "$cleanUrl/api/telemetry"
+            val cleanUrl = if (!url.startsWith("http://") && !url.startsWith("https://")) "https://$url" else url
+            val baseUrl = cleanUrl.trimEnd('/')
+
+            // Parse hive identifier: if alphanumeric (e.g. HIVE-001), extract number or use as-is
+            val digitsOnly = hiveId.filter { it.isDigit() }
+            val numericId = digitsOnly.toIntOrNull() ?: 1
+
+            // 1. First Priority: Socket.IO Engine handshake and initial-data snapshot
+            try {
+                val handshakeReq = okhttp3.Request.Builder()
+                    .url("$baseUrl/socket.io/?EIO=4&transport=polling")
+                    .get()
+                    .build()
+                val handshakeResp = iotClient.newCall(handshakeReq).execute()
+                if (handshakeResp.isSuccessful) {
+                    val handshakeBody = handshakeResp.body?.string().orEmpty()
+                    val sidMatch = Regex(""""sid"\s*:\s*"([^"]+)"""").find(handshakeBody)
+                    if (sidMatch != null) {
+                        val sid = sidMatch.groupValues[1]
+
+                        // Send Engine.IO client connect packet "40"
+                        val connectReq = okhttp3.Request.Builder()
+                            .url("$baseUrl/socket.io/?EIO=4&transport=polling&sid=$sid")
+                            .post("40".toRequestBody("text/plain".toMediaTypeOrNull()))
+                            .build()
+                        iotClient.newCall(connectReq).execute().close()
+
+                        // Poll for snapshot data
+                        val pollReq = okhttp3.Request.Builder()
+                            .url("$baseUrl/socket.io/?EIO=4&transport=polling&sid=$sid")
+                            .get()
+                            .build()
+                        val pollResp = iotClient.newCall(pollReq).execute()
+                        if (pollResp.isSuccessful) {
+                            val pollBody = pollResp.body?.string().orEmpty()
+                            val packets = pollBody.split('\u001e')
+                            for (packet in packets) {
+                                if (packet.contains("initial-data")) {
+                                    val jsonIdx = packet.indexOf('[')
+                                    if (jsonIdx != -1) {
+                                        val arrayJson = org.json.JSONArray(packet.substring(jsonIdx))
+                                        if (arrayJson.length() >= 2) {
+                                            val hivesArray = arrayJson.getJSONArray(1)
+                                            var targetObj: org.json.JSONObject? = null
+                                            for (i in 0 until hivesArray.length()) {
+                                                val item = hivesArray.getJSONObject(i)
+                                                val hId = item.opt("hiveId")?.toString().orEmpty()
+                                                val d = item.optJSONObject("data")
+                                                val dId = d?.opt("hive_id")?.toString().orEmpty()
+                                                if (hId.equals(hiveId, ignoreCase = true) ||
+                                                    dId.equals(hiveId, ignoreCase = true) ||
+                                                    hId == numericId.toString() ||
+                                                    dId == numericId.toString()
+                                                ) {
+                                                    targetObj = d ?: item
+                                                    break
+                                                }
+                                            }
+                                            if (targetObj == null && hivesArray.length() > 0) {
+                                                val firstItem = hivesArray.getJSONObject(0)
+                                                targetObj = firstItem.optJSONObject("data") ?: firstItem
+                                            }
+                                            if (targetObj != null) {
+                                                return@withContext ApiResult.Success(
+                                                    TelemetryRequest(
+                                                        temperatureC = targetObj.optDouble("temperature", 34.8),
+                                                        humidityPercent = targetObj.optDouble("humidity", 58.0),
+                                                        weightKg = targetObj.optDouble("weight", 30.2),
+                                                        soundLevel = targetObj.optDouble("sound_level", 50.0),
+                                                        vibrationLevel = 0.5,
+                                                        batteryPercent = targetObj.optDouble("battery", 92.0)
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (ignored: Exception) {
+                // Fallthrough to next strategy
+            }
+
+            // 2. Second Priority: Read via Scenario/State query
+            try {
+                val scenReq = okhttp3.Request.Builder()
+                    .url("$baseUrl/api/v1/set-scenario/$numericId")
+                    .post("""{"scenario":"healthy"}""".toRequestBody("application/json".toMediaTypeOrNull()))
+                    .build()
+                val scenResp = iotClient.newCall(scenReq).execute()
+                if (scenResp.isSuccessful) {
+                    val body = scenResp.body?.string().orEmpty()
+                    val json = org.json.JSONObject(body)
+                    val data = json.optJSONObject("data")
+                    if (data != null) {
+                        return@withContext ApiResult.Success(
+                            TelemetryRequest(
+                                temperatureC = data.optDouble("temperature", 34.0),
+                                humidityPercent = data.optDouble("humidity", 60.0),
+                                weightKg = data.optDouble("weight", 30.0),
+                                soundLevel = data.optDouble("sound_level", 50.0),
+                                vibrationLevel = 0.5,
+                                batteryPercent = 95.0
+                            )
+                        )
+                    }
+                }
+            } catch (ignored: Exception) {
+                // Fallthrough
+            }
+
+            // 3. Third Priority: REST endpoints
+            val candidateEndpoints = listOf(
+                "$baseUrl/api/v1/hive/$numericId",
+                "$baseUrl/api/v1/hives/$numericId",
+                "$baseUrl/api/telemetry",
+                "$baseUrl/telemetry"
+            )
+            for (endpoint in candidateEndpoints) {
+                try {
+                    val req = okhttp3.Request.Builder().url(endpoint).get().build()
+                    val resp = iotClient.newCall(req).execute()
+                    if (resp.isSuccessful) {
+                        val body = resp.body?.string().orEmpty()
+                        val json = org.json.JSONObject(body)
+                        val targetJson = json.optJSONObject("data") ?: json
+                        return@withContext ApiResult.Success(
+                            TelemetryRequest(
+                                temperatureC = targetJson.optDouble("temperature_c", targetJson.optDouble("temperature", 34.8)),
+                                humidityPercent = targetJson.optDouble("humidity_pct", targetJson.optDouble("humidity", 58.0)),
+                                weightKg = targetJson.optDouble("weight_kg", targetJson.optDouble("weight", 30.2)),
+                                soundLevel = targetJson.optDouble("sound_level_db", targetJson.optDouble("sound_level", 48.0)),
+                                vibrationLevel = 0.5,
+                                batteryPercent = 95.0
+                            )
+                        )
+                    }
+                } catch (ignored: Exception) {
+                }
+            }
+
+            ApiResult.Error(-1, "Unable to read telemetry for Hive $hiveId from IoT Server at $url")
+        } catch (e: Exception) {
+            ApiResult.Error(-1, "Connection error with IoT Server at $url: ${e.localizedMessage}")
+        }
+    }
+
+    suspend fun setScenarioOnExternalIotServer(
+        url: String,
+        hiveId: String,
+        scenario: String
+    ): ApiResult<TelemetryRequest> = withContext(Dispatchers.IO) {
+        try {
+            val cleanUrl = if (!url.startsWith("http://") && !url.startsWith("https://")) "https://$url" else url
+            val baseUrl = cleanUrl.trimEnd('/')
+            val numericId = hiveId.filter { it.isDigit() }.toIntOrNull() ?: 1
+            val scenarioKey = when (scenario.uppercase()) {
+                "HEALTHY", "NORMAL" -> "healthy"
+                "OVERHEAT", "OVERHEATING" -> "overheating"
+                "HUMIDITY", "HIGH HUMIDITY" -> "humidity"
+                "STRESS", "COLONY STRESS", "SWARM" -> "stress"
+                "LOW", "LOW ACTIVITY", "WINTER" -> "low"
+                else -> scenario.lowercase()
+            }
+            val jsonPayload = org.json.JSONObject().put("scenario", scenarioKey)
             val req = okhttp3.Request.Builder()
-                .url(targetUrl)
-                .get()
+                .url("$baseUrl/api/v1/set-scenario/$numericId")
+                .post(jsonPayload.toString().toRequestBody("application/json".toMediaTypeOrNull()))
                 .build()
-            val response = okHttpClient.newCall(req).execute()
-            if (response.isSuccessful) {
-                val body = response.body?.string().orEmpty()
+            val resp = iotClient.newCall(req).execute()
+            if (resp.isSuccessful) {
+                val body = resp.body?.string().orEmpty()
                 val json = org.json.JSONObject(body)
-                val temp = json.optDouble("temperature_c", json.optDouble("temperature", 35.0))
-                val hum = json.optDouble("humidity_pct", json.optDouble("humidity", 55.0))
-                val weight = json.optDouble("weight_kg", json.optDouble("weight", 28.5))
-                val sound = json.optDouble("sound_level_db", json.optDouble("sound", 48.0))
-                val co2 = json.optDouble("co2_ppm", json.optDouble("co2", 650.0))
-                ApiResult.Success(
-                    TelemetryRequest(
-                        temperatureC = temp,
-                        humidityPct = hum,
-                        weightKg = weight,
-                        soundFrequencyHz = null,
-                        soundLevelDb = sound,
-                        co2Ppm = co2
+                val data = json.optJSONObject("data")
+                if (data != null) {
+                    ApiResult.Success(
+                        TelemetryRequest(
+                            temperatureC = data.optDouble("temperature", 34.0),
+                            humidityPercent = data.optDouble("humidity", 60.0),
+                            weightKg = data.optDouble("weight", 30.0),
+                            soundLevel = data.optDouble("sound_level", 50.0),
+                            vibrationLevel = 0.5,
+                            batteryPercent = 95.0
+                        )
                     )
-                )
+                } else {
+                    ApiResult.Error(resp.code, "Scenario applied without data")
+                }
             } else {
-                ApiResult.Error(response.code, "IoT Server returned HTTP ${response.code}")
+                ApiResult.Error(resp.code, "Server returned HTTP ${resp.code}")
             }
         } catch (e: Exception) {
-            ApiResult.Error(-1, "Unable to connect to IoT Server at $url: ${e.localizedMessage}")
+            ApiResult.Error(-1, "Failed to apply scenario on IoT server: ${e.localizedMessage}")
+        }
+    }
+
+    suspend fun updateMetricsOnExternalIotServer(
+        url: String,
+        hiveId: String,
+        temp: Double,
+        humidity: Double,
+        weight: Double,
+        soundDb: Double,
+        co2Ppm: Double
+    ): ApiResult<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val cleanUrl = if (!url.startsWith("http://") && !url.startsWith("https://")) "https://$url" else url
+            val baseUrl = cleanUrl.trimEnd('/')
+            val numericId = hiveId.filter { it.isDigit() }.toIntOrNull() ?: 1
+            val json = org.json.JSONObject().apply {
+                put("temperature", temp)
+                put("humidity", humidity)
+                put("weight", weight)
+                put("sound_level", soundDb)
+                put("co2_level", co2Ppm)
+            }
+            val req = okhttp3.Request.Builder()
+                .url("$baseUrl/api/v1/update-iot/$numericId")
+                .post(json.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+                .build()
+            val resp = iotClient.newCall(req).execute()
+            if (resp.isSuccessful) {
+                ApiResult.Success(true)
+            } else {
+                ApiResult.Error(resp.code, "HTTP ${resp.code}")
+            }
+        } catch (e: Exception) {
+            ApiResult.Error(-1, e.localizedMessage ?: "Update failed")
         }
     }
 
