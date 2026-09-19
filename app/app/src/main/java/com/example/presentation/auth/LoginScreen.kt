@@ -77,18 +77,12 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Branding Icon & Title
-            Icon(
-                imageVector = Icons.Default.Hexagon,
-                contentDescription = "Honey Chain",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(64.dp)
-            )
-
-            Text(
-                text = "Honey Chain",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+            Image(
+                painter = painterResource(id = R.drawable.madhu_sathi_logo),
+                contentDescription = "Madhu Sathi Logo",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
             )
 
             Text(
