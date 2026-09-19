@@ -23,11 +23,94 @@ const sldValWeight = document.getElementById('slide-val-weight');
 const sldValSound = document.getElementById('slide-val-sound');
 const sldValCo2 = document.getElementById('slide-val-co2');
 
+const hiveSelect = document.getElementById('hive-select');
+const newHiveInput = document.getElementById('new-hive-id');
+
+let hives = {};
+let currentHiveId = "HIVE_001";
+
 // Socket Listener
-socket.on('iot-update', (data) => {
-  updateDashboard(data);
-  updateSliders(data);
+socket.on('initial-data', (dataArray) => {
+  hives = {};
+  hiveSelect.innerHTML = '';
+  dataArray.forEach(item => {
+    hives[item.hiveId] = item.data;
+    addHiveToDropdown(item.hiveId);
+  });
+  
+  if (!hives[currentHiveId] && dataArray.length > 0) {
+    currentHiveId = dataArray[0].hiveId;
+  }
+  hiveSelect.value = currentHiveId;
+  if (hives[currentHiveId]) {
+    updateDashboard(hives[currentHiveId]);
+    updateSliders(hives[currentHiveId]);
+  }
 });
+
+socket.on('iot-update', (payload) => {
+  // Support BOTH formats (backward compatibility)
+  if (payload.hiveId) {
+    // New system format: { hiveId, data }
+    hives[payload.hiveId] = payload.data;
+    if (!hiveSelect.querySelector(`option[value="${payload.hiveId}"]`)) {
+      addHiveToDropdown(payload.hiveId);
+    }
+    
+    if (payload.hiveId === currentHiveId) {
+      updateDashboard(payload.data);
+      updateSliders(payload.data);
+    }
+  } else {
+    // Old system fallback (assumes single hive or defaults to HIVE_001)
+    const data = payload;
+    hives["HIVE_001"] = data;
+    if (currentHiveId === "HIVE_001") {
+      updateDashboard(data);
+      updateSliders(data);
+    }
+  }
+});
+
+function addHiveToDropdown(hiveId) {
+  if (!hiveSelect.querySelector(`option[value="${hiveId}"]`)) {
+    const opt = document.createElement('option');
+    opt.value = hiveId;
+    opt.textContent = hiveId;
+    hiveSelect.appendChild(opt);
+  }
+}
+
+function selectHive(hiveId) {
+  currentHiveId = hiveId;
+  if (hives[hiveId]) {
+    updateDashboard(hives[hiveId]);
+    updateSliders(hives[hiveId]);
+  }
+}
+
+async function registerHive() {
+  const hiveId = newHiveInput.value.trim();
+  if (!hiveId) return alert("Please enter a Hive ID");
+  
+  try {
+    const res = await fetch(`${API_BASE}/register-hive`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hiveId })
+    });
+    const data = await res.json();
+    if(data.success) {
+      newHiveInput.value = '';
+      selectHive(hiveId);
+      hiveSelect.value = hiveId;
+    } else {
+      alert(data.error);
+    }
+  } catch (e) {
+    console.error(e);
+  }
+}
 
 function updateDashboard(data) {
   elTemp.textContent = data.temperature.toFixed(1);
@@ -65,7 +148,7 @@ function updateSliders(data) {
 // Actions
 async function setScenario(scenario) {
   try {
-    const res = await fetch(`${API_BASE}/set-scenario`, {
+    const res = await fetch(`${API_BASE}/set-scenario/${currentHiveId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scenario })
@@ -79,7 +162,7 @@ async function setScenario(scenario) {
 
 async function resetState() {
   try {
-    await fetch(`${API_BASE}/reset`, { method: 'POST' });
+    await fetch(`${API_BASE}/reset/${currentHiveId}`, { method: 'POST' });
   } catch (e) {
     console.error(e);
   }
@@ -88,7 +171,7 @@ async function resetState() {
 async function startSimulation() {
   const interval = parseInt(document.getElementById('sim-interval').value) || 2000;
   try {
-    const res = await fetch(`${API_BASE}/simulate`, {
+    const res = await fetch(`${API_BASE}/simulate/${currentHiveId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ interval })
@@ -102,7 +185,32 @@ async function startSimulation() {
 
 async function stopSimulation() {
   try {
-    const res = await fetch(`${API_BASE}/stop-simulation`, { method: 'POST' });
+    const res = await fetch(`${API_BASE}/stop-simulation/${currentHiveId}`, { method: 'POST' });
+    const data = await res.json();
+    if(!data.success) alert(data.error);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function startSimulationAll() {
+  const interval = parseInt(document.getElementById('sim-interval').value) || 2000;
+  try {
+    const res = await fetch(`${API_BASE}/simulate-all`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ interval })
+    });
+    const data = await res.json();
+    if(!data.success) alert(data.error);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function stopSimulationAll() {
+  try {
+    const res = await fetch(`${API_BASE}/stop-simulation-all`, { method: 'POST' });
     const data = await res.json();
     if(!data.success) alert(data.error);
   } catch (e) {
@@ -123,7 +231,7 @@ function updateValue(field, value) {
       const payload = {};
       payload[field] = parseFloat(value);
       
-      await fetch(`${API_BASE}/update-iot`, {
+      await fetch(`${API_BASE}/update-iot/${currentHiveId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

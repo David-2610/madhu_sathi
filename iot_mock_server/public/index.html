@@ -10,6 +10,15 @@
   <div class="container">
     <header>
       <h1>🐝 Hive IoT Simulation Control</h1>
+      <div class="hive-controls">
+        <select id="hive-select" onchange="selectHive(this.value)">
+          <!-- Options populated dynamically -->
+        </select>
+        <div class="register-group">
+          <input type="text" id="new-hive-id" placeholder="HIVE_XXX">
+          <button onclick="registerHive()">Register Hive</button>
+        </div>
+      </div>
     </header>
 
     <main class="dashboard">
@@ -71,6 +80,10 @@
         <div class="button-grid">
           <button onclick="startSimulation()" class="btn-start">Start Auto-Stream</button>
           <button onclick="stopSimulation()" class="btn-stop">Stop Stream</button>
+        </div>
+        <div class="button-grid" style="margin-top: 15px;">
+          <button onclick="startSimulationAll()" class="btn-start">Simulate ALL</button>
+          <button onclick="stopSimulationAll()" class="btn-stop">Stop ALL</button>
         </div>
       </section>
 

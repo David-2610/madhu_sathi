@@ -26,7 +26,37 @@ body {
 header h1 {
   text-align: center;
   color: var(--primary);
+  margin-bottom: 20px;
+}
+
+.hive-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 30px;
+  background: var(--panel-bg);
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.hive-controls select {
+  padding: 10px;
+  font-size: 1rem;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  min-width: 200px;
+}
+
+.register-group {
+  display: flex;
+  gap: 10px;
+}
+
+.register-group input {
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
 }
 
 .dashboard {

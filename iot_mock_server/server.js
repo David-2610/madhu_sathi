@@ -26,6 +26,8 @@ app.get('/control', (req, res) => {
 // -----------------------------------
 // 3. IoT Data Model (Initial State)
 // -----------------------------------
+const DEFAULT_HIVE = "HIVE_001";
+
 const defaultState = {
   temperature: 34,
   humidity: 60,
@@ -33,11 +35,22 @@ const defaultState = {
   sound_level: 50,
   co2_level: 700,
   activity_level: "Normal",
-  status: "Healthy",
-  timestamp: new Date().toISOString()
+  status: "Healthy"
 };
 
-let iotState = { ...defaultState };
+const iotHives = {};
+const lastBroadcasts = {};
+const simIntervalIds = {};
+
+function getHiveState(hiveId) {
+  if (!iotHives[hiveId]) {
+    iotHives[hiveId] = { ...defaultState, timestamp: new Date().toISOString() };
+  }
+  return iotHives[hiveId];
+}
+
+// Initialize default hive
+getHiveState(DEFAULT_HIVE);
 
 // -----------------------------------
 // 5. Scenario Engine
@@ -87,18 +100,22 @@ function validateData(data) {
 // -----------------------------------
 // 10. Real-Time Updates (Throttled Broadcast)
 // -----------------------------------
-let lastBroadcast = 0;
-function broadcastUpdate() {
+function broadcastUpdate(hiveId) {
   const now = Date.now();
-  if (now - lastBroadcast >= 1000) {
-    io.emit('iot-update', iotState);
-    lastBroadcast = now;
+  if (!lastBroadcasts[hiveId] || now - lastBroadcasts[hiveId] >= 1000) {
+    io.emit('iot-update', { hiveId, data: iotHives[hiveId] });
+    lastBroadcasts[hiveId] = now;
   }
 }
 
 // Initial connection
 io.on('connection', (socket) => {
-  socket.emit('iot-update', iotState);
+  // Emit all current hives
+  const data = Object.keys(iotHives).map(hiveId => ({
+    hiveId,
+    data: iotHives[hiveId]
+  }));
+  socket.emit('initial-data', data);
 });
 
 // Helper for responses
@@ -115,37 +132,68 @@ function sendError(res, error) {
 
 // GET /iot-data
 app.get(`${API_BASE}/iot-data`, (req, res) => {
-  sendSuccess(res, iotState);
+  const data = Object.keys(iotHives).map(hiveId => ({
+    hiveId,
+    data: iotHives[hiveId]
+  }));
+  sendSuccess(res, data);
+});
+
+// GET /iot-data/:hiveId
+app.get(`${API_BASE}/iot-data/:hiveId`, (req, res) => {
+  const hiveId = req.params.hiveId;
+  const state = getHiveState(hiveId);
+  sendSuccess(res, { hiveId, data: state });
+});
+
+// POST /register-hive
+app.post(`${API_BASE}/register-hive`, (req, res) => {
+  const { hiveId } = req.body;
+  if (!hiveId) return sendError(res, "Missing hiveId");
+  
+  const isNew = !iotHives[hiveId];
+  const state = getHiveState(hiveId);
+  
+  if (isNew) {
+    console.log(`New hive registered: ${hiveId}`);
+    broadcastUpdate(hiveId);
+  }
+  
+  sendSuccess(res, { hiveId, data: state }, `Hive ${hiveId} ready`);
 });
 
 // POST /update-iot
-app.post(`${API_BASE}/update-iot`, (req, res) => {
+app.post([`${API_BASE}/update-iot`, `${API_BASE}/update-iot/:hiveId`], (req, res) => {
+  const hiveId = req.params.hiveId || DEFAULT_HIVE;
   const err = validateData(req.body);
   if (err) return sendError(res, err);
 
-  Object.assign(iotState, req.body);
-  computeDerivedFields(iotState);
+  const state = getHiveState(hiveId);
+  Object.assign(state, req.body);
+  computeDerivedFields(state);
   
-  console.log("IoT Updated:", iotState);
-  broadcastUpdate();
+  console.log(`IoT Updated [${hiveId}]:`, state);
+  broadcastUpdate(hiveId);
   
-  sendSuccess(res, iotState, "Data updated successfully");
+  sendSuccess(res, state, "Data updated successfully");
 });
 
 // POST /set-scenario
-app.post(`${API_BASE}/set-scenario`, (req, res) => {
+app.post([`${API_BASE}/set-scenario`, `${API_BASE}/set-scenario/:hiveId`], (req, res) => {
+  const hiveId = req.params.hiveId || DEFAULT_HIVE;
   const { scenario } = req.body;
   if (!scenario || !scenarios[scenario]) {
     return sendError(res, "Invalid or missing scenario");
   }
 
-  Object.assign(iotState, scenarios[scenario]);
-  computeDerivedFields(iotState);
+  const state = getHiveState(hiveId);
+  Object.assign(state, scenarios[scenario]);
+  computeDerivedFields(state);
   
-  console.log("IoT Updated (Scenario):", iotState);
-  broadcastUpdate();
+  console.log(`IoT Updated (Scenario) [${hiveId}]:`, state);
+  broadcastUpdate(hiveId);
   
-  sendSuccess(res, iotState, `Scenario '${scenario}' applied`);
+  sendSuccess(res, state, `Scenario '${scenario}' applied to ${hiveId}`);
 });
 
 // GET /health
@@ -154,70 +202,92 @@ app.get(`${API_BASE}/health`, (req, res) => {
 });
 
 // POST /reset
-app.post(`${API_BASE}/reset`, (req, res) => {
-  iotState = { ...defaultState };
-  iotState.timestamp = new Date().toISOString();
+app.post([`${API_BASE}/reset`, `${API_BASE}/reset/:hiveId`], (req, res) => {
+  const hiveId = req.params.hiveId || DEFAULT_HIVE;
+  iotHives[hiveId] = { ...defaultState, timestamp: new Date().toISOString() };
   
-  console.log("IoT Updated (Reset):", iotState);
-  broadcastUpdate();
+  console.log(`IoT Updated (Reset) [${hiveId}]:`, iotHives[hiveId]);
+  broadcastUpdate(hiveId);
   
-  sendSuccess(res, iotState, "Reset to default state");
+  sendSuccess(res, iotHives[hiveId], `Reset to default state for ${hiveId}`);
 });
 
 // -----------------------------------
 // 9. Simulation Engine
 // -----------------------------------
-let simIntervalId = null;
 
-app.post(`${API_BASE}/simulate`, (req, res) => {
-  if (simIntervalId) {
-    return sendError(res, "Simulation is already running");
+function startSimForHive(hiveId, interval) {
+  if (simIntervalIds[hiveId]) return false;
+
+  simIntervalIds[hiveId] = setInterval(() => {
+    const state = getHiveState(hiveId);
+    // realistic small fluctuations
+    state.temperature += (Math.random() * 1.0 - 0.5); // ±0.5
+    state.humidity += (Math.random() * 4.0 - 2.0); // ±2
+    state.sound_level += (Math.random() * 10.0 - 5.0); // ±5
+    state.co2_level += (Math.random() * 100.0 - 50.0); // ±50
+    state.weight += (Math.random() * 0.2 - 0.1); // slow change
+
+    // keep within valid bounds
+    state.temperature = Math.max(0, Math.min(60, state.temperature));
+    state.humidity = Math.max(0, Math.min(100, state.humidity));
+    state.sound_level = Math.max(0, Math.min(120, state.sound_level));
+    state.co2_level = Math.max(300, Math.min(2000, state.co2_level));
+    state.weight = Math.max(1, state.weight);
+
+    computeDerivedFields(state);
+    
+    console.log(`IoT Updated (Sim) [${hiveId}]:`, state.status, state.activity_level);
+    
+    io.emit('iot-update', { hiveId, data: state });
+    lastBroadcasts[hiveId] = Date.now();
+  }, interval);
+  return true;
+}
+
+app.post([`${API_BASE}/simulate`, `${API_BASE}/simulate/:hiveId`], (req, res) => {
+  const hiveId = req.params.hiveId || DEFAULT_HIVE;
+  if (simIntervalIds[hiveId]) {
+    return sendError(res, `Simulation is already running for ${hiveId}`);
   }
 
   let interval = req.body.interval || 2000;
   if (interval < 1000) interval = 1000;
 
-  simIntervalId = setInterval(() => {
-    // realistic small fluctuations
-    iotState.temperature += (Math.random() * 1.0 - 0.5); // ±0.5
-    iotState.humidity += (Math.random() * 4.0 - 2.0); // ±2
-    iotState.sound_level += (Math.random() * 10.0 - 5.0); // ±5
-    iotState.co2_level += (Math.random() * 100.0 - 50.0); // ±50
-    iotState.weight += (Math.random() * 0.2 - 0.1); // slow change
-
-    // keep within valid bounds
-    iotState.temperature = Math.max(0, Math.min(60, iotState.temperature));
-    iotState.humidity = Math.max(0, Math.min(100, iotState.humidity));
-    iotState.sound_level = Math.max(0, Math.min(120, iotState.sound_level));
-    iotState.co2_level = Math.max(300, Math.min(2000, iotState.co2_level));
-    iotState.weight = Math.max(1, iotState.weight);
-
-    computeDerivedFields(iotState);
-    
-    // Explicitly broadcast immediately without throttle limits for simulation, 
-    // but the broadcastUpdate helper respects the 1s throttle.
-    // If the interval is >= 1000, the throttle won't suppress it.
-    console.log("IoT Updated (Simulation tick):", iotState.status, iotState.activity_level);
-    
-    // Bypass throttle for simulation since it's interval-based, 
-    // or just let broadcastUpdate handle it. Let's just emit directly 
-    // to ensure simulation is smooth if interval > 1000.
-    io.emit('iot-update', iotState);
-    lastBroadcast = Date.now();
-    
-  }, interval);
-
-  sendSuccess(res, { running: true, interval }, "Simulation started");
+  startSimForHive(hiveId, interval);
+  sendSuccess(res, { running: true, interval, hiveId }, `Simulation started for ${hiveId}`);
 });
 
-app.post(`${API_BASE}/stop-simulation`, (req, res) => {
-  if (simIntervalId) {
-    clearInterval(simIntervalId);
-    simIntervalId = null;
-    sendSuccess(res, null, "Simulation stopped");
+app.post([`${API_BASE}/stop-simulation`, `${API_BASE}/stop-simulation/:hiveId`], (req, res) => {
+  const hiveId = req.params.hiveId || DEFAULT_HIVE;
+  if (simIntervalIds[hiveId]) {
+    clearInterval(simIntervalIds[hiveId]);
+    delete simIntervalIds[hiveId];
+    sendSuccess(res, null, `Simulation stopped for ${hiveId}`);
   } else {
-    sendError(res, "Simulation is not running");
+    sendError(res, `Simulation is not running for ${hiveId}`);
   }
+});
+
+app.post(`${API_BASE}/simulate-all`, (req, res) => {
+  let interval = req.body.interval || 2000;
+  if (interval < 1000) interval = 1000;
+  
+  let started = 0;
+  for (const hiveId of Object.keys(iotHives)) {
+    if (startSimForHive(hiveId, interval)) started++;
+  }
+  sendSuccess(res, { running: true, interval, started }, `Started simulation for ${started} hives`);
+});
+
+app.post(`${API_BASE}/stop-simulation-all`, (req, res) => {
+  let stopped = 0;
+  for (const hiveId of Object.keys(simIntervalIds)) {
+    clearInterval(simIntervalIds[hiveId]);
+    delete simIntervalIds[hiveId];
+    stopped++;
+  }
+  sendSuccess(res, { stopped }, `Stopped simulation for ${stopped} hives`);
 });
 
 // Start Server
