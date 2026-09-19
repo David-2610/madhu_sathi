@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     # ── QR & Traceability (Phase 5) ────────────────────────────────────────
     BASE_URL: str = "http://localhost:8000"
 
+    # ── IoT Bridge ─────────────────────────────────────────────────────────
+    # The deployed URL of this backend — used by the IoT bridge to forward
+    # telemetry from the IoT Mock Server into our own telemetry pipeline.
+    BACKEND_BASE_URL: str = "https://madhu-sathi.vercel.app"
+    IOT_SERVER_URL: str = "https://iotmockserver.vercel.app/api/v1"
+    IOT_BRIDGE_ENABLED: bool = True          # Set False to disable background bridge
+    IOT_BRIDGE_POLL_SECONDS: int = 10        # Polling interval in seconds
+
     # ── Blockchain Abstraction (Phase 5) ───────────────────────────────────
     BLOCKCHAIN_PROVIDER: str = "mock"  # "mock" | "evm"
     BLOCKCHAIN_RPC_URL: str | None = None

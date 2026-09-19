@@ -9,6 +9,7 @@ Responsibilities:
 - Probe DB connectivity on startup (non-blocking warning if unavailable)
 """
 
+import asyncio
 import logging
 import sys
 from contextlib import asynccontextmanager
@@ -27,6 +28,7 @@ from app.api.routes import marketplace as marketplace_router
 from app.api.routes import trace as trace_router
 from app.core.config import get_settings
 from app.db import check_db_connection
+from app.services.iot_bridge import run_iot_bridge
 
 
 # ── Logging ────────────────────────────────────────────────────────────────
@@ -59,9 +61,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:  # noqa: ARG001
             "but DB-dependent routes will not work until the database is reachable."
         )
 
+    # ── IoT Bridge ─────────────────────────────────────────────────────────
+    # Start background task that polls IoT Mock Server and forwards telemetry
+    # to our own pipeline, establishing: IoT Server → Backend → Frontend flow.
+    bridge_task = None
+    if settings.IOT_BRIDGE_ENABLED:
+        logger.info("IoT Bridge: Starting background polling task...")
+        bridge_task = asyncio.create_task(run_iot_bridge())
+    else:
+        logger.info("IoT Bridge: Disabled (IOT_BRIDGE_ENABLED=False)")
+
     yield  # application runs here
 
     # ── shutdown ───────────────────────────────────────────────────────────
+    if bridge_task and not bridge_task.done():
+        bridge_task.cancel()
+        logger.info("IoT Bridge: Stopped.")
     logger.info("Shutting down %s", settings.APP_NAME)
 
 
