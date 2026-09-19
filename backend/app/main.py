@@ -126,6 +126,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 
 # ── Routers ────────────────────────────────────────────────────────────────
+from app.api.routes import dev as dev_router
+
 app.include_router(health_router.router)
 app.include_router(auth_router.router)
 app.include_router(beekeeper_router.router)
@@ -134,4 +136,5 @@ app.include_router(marketplace_router.router)
 app.include_router(buyer_router.router)
 app.include_router(iot_router.router)
 app.include_router(kvic_router.router)
+app.include_router(dev_router.router)
 

@@ -3,6 +3,8 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
+const { Pool } = require('pg');
+require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
@@ -12,6 +14,11 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3000;
 const API_BASE = '/api/v1';
+
+// PostgreSQL connection
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL
+});
 
 // Middleware
 app.use(cors());
@@ -26,8 +33,6 @@ app.get('/control', (req, res) => {
 // -----------------------------------
 // 3. IoT Data Model (Initial State)
 // -----------------------------------
-const DEFAULT_HIVE = "HIVE_001";
-
 const defaultState = {
   temperature: 34,
   humidity: 60,
@@ -38,19 +43,21 @@ const defaultState = {
   status: "Healthy"
 };
 
-const iotHives = {};
 const lastBroadcasts = {};
 const simIntervalIds = {};
 
-function getHiveState(hiveId) {
-  if (!iotHives[hiveId]) {
-    iotHives[hiveId] = { ...defaultState, timestamp: new Date().toISOString() };
+async function getHiveState(hiveId) {
+  const result = await pool.query('SELECT * FROM iot_hive_states WHERE hive_id = $1', [hiveId]);
+  if (result.rows.length > 0) {
+    return result.rows[0];
   }
-  return iotHives[hiveId];
+  return null;
 }
 
-// Initialize default hive
-getHiveState(DEFAULT_HIVE);
+async function getAllHives() {
+  const result = await pool.query('SELECT * FROM iot_hive_states');
+  return result.rows;
+}
 
 // -----------------------------------
 // 5. Scenario Engine
@@ -67,12 +74,10 @@ const scenarios = {
 // 4. Derived Logic
 // -----------------------------------
 function computeDerivedFields(data) {
-  // activity_level
   if (data.sound_level < 30) data.activity_level = "Low";
   else if (data.sound_level <= 70) data.activity_level = "Normal";
   else data.activity_level = "Aggressive";
 
-  // status
   if (data.temperature > 40 || data.co2_level > 1000) {
     data.status = "Critical";
   } else if (data.humidity > 80) {
@@ -81,7 +86,7 @@ function computeDerivedFields(data) {
     data.status = "Healthy";
   }
 
-  data.timestamp = new Date().toISOString();
+  data.last_updated = new Date().toISOString();
   return data;
 }
 
@@ -97,23 +102,37 @@ function validateData(data) {
   return null;
 }
 
+async function updateHiveStateDB(hiveId, state) {
+  const query = `
+    UPDATE iot_hive_states 
+    SET temperature = $1, humidity = $2, weight = $3, sound_level = $4, co2_level = $5, activity_level = $6, status = $7, last_updated = CURRENT_TIMESTAMP
+    WHERE hive_id = $8 RETURNING *
+  `;
+  const values = [
+    state.temperature, state.humidity, state.weight, state.sound_level, state.co2_level,
+    state.activity_level, state.status, hiveId
+  ];
+  const result = await pool.query(query, values);
+  return result.rows[0];
+}
+
 // -----------------------------------
 // 10. Real-Time Updates (Throttled Broadcast)
 // -----------------------------------
-function broadcastUpdate(hiveId) {
+function broadcastUpdate(hiveId, state) {
   const now = Date.now();
   if (!lastBroadcasts[hiveId] || now - lastBroadcasts[hiveId] >= 1000) {
-    io.emit('iot-update', { hiveId, data: iotHives[hiveId] });
+    io.emit('iot-update', { hiveId, data: state });
     lastBroadcasts[hiveId] = now;
   }
 }
 
 // Initial connection
-io.on('connection', (socket) => {
-  // Emit all current hives
-  const data = Object.keys(iotHives).map(hiveId => ({
-    hiveId,
-    data: iotHives[hiveId]
+io.on('connection', async (socket) => {
+  const hives = await getAllHives();
+  const data = hives.map(hive => ({
+    hiveId: hive.hive_id,
+    data: hive
   }));
   socket.emit('initial-data', data);
 });
@@ -130,105 +149,94 @@ function sendError(res, error) {
 // 8. API Endpoints
 // -----------------------------------
 
-// GET /iot-data
-app.get(`${API_BASE}/iot-data`, (req, res) => {
-  const data = Object.keys(iotHives).map(hiveId => ({
-    hiveId,
-    data: iotHives[hiveId]
-  }));
+app.get(`${API_BASE}/iot-data`, async (req, res) => {
+  const hives = await getAllHives();
+  const data = hives.map(hive => ({ hiveId: hive.hive_id, data: hive }));
   sendSuccess(res, data);
 });
 
-// GET /iot-data/:hiveId
-app.get(`${API_BASE}/iot-data/:hiveId`, (req, res) => {
+app.get(`${API_BASE}/iot-data/:hiveId`, async (req, res) => {
+  const state = await getHiveState(req.params.hiveId);
+  if (!state) return sendError(res, "Hive not found");
+  sendSuccess(res, { hiveId: req.params.hiveId, data: state });
+});
+
+app.post([`${API_BASE}/update-iot/:hiveId`], async (req, res) => {
   const hiveId = req.params.hiveId;
-  const state = getHiveState(hiveId);
-  sendSuccess(res, { hiveId, data: state });
-});
-
-// POST /register-hive
-app.post(`${API_BASE}/register-hive`, (req, res) => {
-  const { hiveId } = req.body;
-  if (!hiveId) return sendError(res, "Missing hiveId");
-  
-  const isNew = !iotHives[hiveId];
-  const state = getHiveState(hiveId);
-  
-  if (isNew) {
-    console.log(`New hive registered: ${hiveId}`);
-    broadcastUpdate(hiveId);
-  }
-  
-  sendSuccess(res, { hiveId, data: state }, `Hive ${hiveId} ready`);
-});
-
-// POST /update-iot
-app.post([`${API_BASE}/update-iot`, `${API_BASE}/update-iot/:hiveId`], (req, res) => {
-  const hiveId = req.params.hiveId || DEFAULT_HIVE;
   const err = validateData(req.body);
   if (err) return sendError(res, err);
 
-  const state = getHiveState(hiveId);
+  const state = await getHiveState(hiveId);
+  if (!state) return sendError(res, "Hive not found");
+
   Object.assign(state, req.body);
   computeDerivedFields(state);
+  const updatedState = await updateHiveStateDB(hiveId, state);
   
-  console.log(`IoT Updated [${hiveId}]:`, state);
-  broadcastUpdate(hiveId);
+  console.log(`IoT Updated [${hiveId}]:`, updatedState);
+  broadcastUpdate(hiveId, updatedState);
   
-  sendSuccess(res, state, "Data updated successfully");
+  sendSuccess(res, updatedState, "Data updated successfully");
 });
 
-// POST /set-scenario
-app.post([`${API_BASE}/set-scenario`, `${API_BASE}/set-scenario/:hiveId`], (req, res) => {
-  const hiveId = req.params.hiveId || DEFAULT_HIVE;
+app.post([`${API_BASE}/set-scenario/:hiveId`], async (req, res) => {
+  const hiveId = req.params.hiveId;
   const { scenario } = req.body;
-  if (!scenario || !scenarios[scenario]) {
-    return sendError(res, "Invalid or missing scenario");
-  }
+  if (!scenario || !scenarios[scenario]) return sendError(res, "Invalid scenario");
 
-  const state = getHiveState(hiveId);
+  const state = await getHiveState(hiveId);
+  if (!state) return sendError(res, "Hive not found");
+
   Object.assign(state, scenarios[scenario]);
   computeDerivedFields(state);
+  const updatedState = await updateHiveStateDB(hiveId, state);
   
-  console.log(`IoT Updated (Scenario) [${hiveId}]:`, state);
-  broadcastUpdate(hiveId);
+  console.log(`IoT Updated (Scenario) [${hiveId}]:`, updatedState);
+  broadcastUpdate(hiveId, updatedState);
   
-  sendSuccess(res, state, `Scenario '${scenario}' applied to ${hiveId}`);
+  sendSuccess(res, updatedState, `Scenario applied`);
 });
 
-// GET /health
 app.get(`${API_BASE}/health`, (req, res) => {
   res.json({ status: "ok" });
 });
 
-// POST /reset
-app.post([`${API_BASE}/reset`, `${API_BASE}/reset/:hiveId`], (req, res) => {
-  const hiveId = req.params.hiveId || DEFAULT_HIVE;
-  iotHives[hiveId] = { ...defaultState, timestamp: new Date().toISOString() };
+app.post([`${API_BASE}/reset/:hiveId`], async (req, res) => {
+  const hiveId = req.params.hiveId;
+  const state = await getHiveState(hiveId);
+  if (!state) return sendError(res, "Hive not found");
+
+  Object.assign(state, defaultState);
+  computeDerivedFields(state);
+  const updatedState = await updateHiveStateDB(hiveId, state);
+
+  console.log(`IoT Updated (Reset) [${hiveId}]:`, updatedState);
+  broadcastUpdate(hiveId, updatedState);
   
-  console.log(`IoT Updated (Reset) [${hiveId}]:`, iotHives[hiveId]);
-  broadcastUpdate(hiveId);
-  
-  sendSuccess(res, iotHives[hiveId], `Reset to default state for ${hiveId}`);
+  sendSuccess(res, updatedState, `Reset to default`);
 });
 
 // -----------------------------------
 // 9. Simulation Engine
 // -----------------------------------
 
-function startSimForHive(hiveId, interval) {
+async function startSimForHive(hiveId, interval) {
   if (simIntervalIds[hiveId]) return false;
 
-  simIntervalIds[hiveId] = setInterval(() => {
-    const state = getHiveState(hiveId);
-    // realistic small fluctuations
-    state.temperature += (Math.random() * 1.0 - 0.5); // ±0.5
-    state.humidity += (Math.random() * 4.0 - 2.0); // ±2
-    state.sound_level += (Math.random() * 10.0 - 5.0); // ±5
-    state.co2_level += (Math.random() * 100.0 - 50.0); // ±50
-    state.weight += (Math.random() * 0.2 - 0.1); // slow change
+  simIntervalIds[hiveId] = setInterval(async () => {
+    const state = await getHiveState(hiveId);
+    if (!state) {
+      clearInterval(simIntervalIds[hiveId]);
+      delete simIntervalIds[hiveId];
+      return;
+    }
 
-    // keep within valid bounds
+    state.temperature += (Math.random() * 1.0 - 0.5);
+    state.humidity += (Math.random() * 4.0 - 2.0);
+    state.sound_level += (Math.random() * 10.0 - 5.0);
+    state.co2_level += (Math.random() * 100.0 - 50.0);
+    state.weight += (Math.random() * 0.2 - 0.1);
+
     state.temperature = Math.max(0, Math.min(60, state.temperature));
     state.humidity = Math.max(0, Math.min(100, state.humidity));
     state.sound_level = Math.max(0, Math.min(120, state.sound_level));
@@ -236,61 +244,41 @@ function startSimForHive(hiveId, interval) {
     state.weight = Math.max(1, state.weight);
 
     computeDerivedFields(state);
+    const updatedState = await updateHiveStateDB(hiveId, state);
     
-    console.log(`IoT Updated (Sim) [${hiveId}]:`, state.status, state.activity_level);
+    console.log(`IoT Updated (Sim) [${hiveId}]:`, updatedState.status, updatedState.activity_level);
     
-    io.emit('iot-update', { hiveId, data: state });
+    io.emit('iot-update', { hiveId, data: updatedState });
     lastBroadcasts[hiveId] = Date.now();
   }, interval);
   return true;
 }
 
-app.post([`${API_BASE}/simulate`, `${API_BASE}/simulate/:hiveId`], (req, res) => {
-  const hiveId = req.params.hiveId || DEFAULT_HIVE;
-  if (simIntervalIds[hiveId]) {
-    return sendError(res, `Simulation is already running for ${hiveId}`);
-  }
+app.post([`${API_BASE}/simulate/:hiveId`], async (req, res) => {
+  const hiveId = req.params.hiveId;
+  if (simIntervalIds[hiveId]) return sendError(res, "Simulation is already running");
+
+  const state = await getHiveState(hiveId);
+  if (!state) return sendError(res, "Hive not found");
 
   let interval = req.body.interval || 2000;
   if (interval < 1000) interval = 1000;
 
   startSimForHive(hiveId, interval);
-  sendSuccess(res, { running: true, interval, hiveId }, `Simulation started for ${hiveId}`);
+  sendSuccess(res, { running: true, interval, hiveId }, `Simulation started`);
 });
 
-app.post([`${API_BASE}/stop-simulation`, `${API_BASE}/stop-simulation/:hiveId`], (req, res) => {
-  const hiveId = req.params.hiveId || DEFAULT_HIVE;
+app.post([`${API_BASE}/stop-simulation/:hiveId`], (req, res) => {
+  const hiveId = req.params.hiveId;
   if (simIntervalIds[hiveId]) {
     clearInterval(simIntervalIds[hiveId]);
     delete simIntervalIds[hiveId];
-    sendSuccess(res, null, `Simulation stopped for ${hiveId}`);
+    sendSuccess(res, null, `Simulation stopped`);
   } else {
-    sendError(res, `Simulation is not running for ${hiveId}`);
+    sendError(res, `Simulation not running`);
   }
 });
 
-app.post(`${API_BASE}/simulate-all`, (req, res) => {
-  let interval = req.body.interval || 2000;
-  if (interval < 1000) interval = 1000;
-  
-  let started = 0;
-  for (const hiveId of Object.keys(iotHives)) {
-    if (startSimForHive(hiveId, interval)) started++;
-  }
-  sendSuccess(res, { running: true, interval, started }, `Started simulation for ${started} hives`);
-});
-
-app.post(`${API_BASE}/stop-simulation-all`, (req, res) => {
-  let stopped = 0;
-  for (const hiveId of Object.keys(simIntervalIds)) {
-    clearInterval(simIntervalIds[hiveId]);
-    delete simIntervalIds[hiveId];
-    stopped++;
-  }
-  sendSuccess(res, { stopped }, `Stopped simulation for ${stopped} hives`);
-});
-
-// Start Server
 server.listen(PORT, () => {
-  console.log(`IoT Mock Server running on port ${PORT}`);
+  console.log(`IoT Mock Server connected to PostgreSQL running on port ${PORT}`);
 });

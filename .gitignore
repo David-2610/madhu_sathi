@@ -1,0 +1,45 @@
+# ─── Python ───────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ─── Virtual environments ──────────────────────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+
+# ─── Environment variables (NEVER commit real secrets) ────────────────────
+.env
+
+# ─── IDE / Editor ─────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+node_modules/
+
+# ─── Testing & Coverage ───────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.coveragerc
+
+# ─── Alembic ──────────────────────────────────────────────────────────────
+# Keep migrations directory tracked; ignore nothing inside by default
+
+# ─── Logs ─────────────────────────────────────────────────────────────────
+*.log
+logs/
+.env
+.venv/
+__pycache__/
+.pytest_cache/

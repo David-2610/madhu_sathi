@@ -50,6 +50,13 @@ def create_hive(db: Session, apiary_id: int, payload: HiveCreate) -> Hive:
     db.add(hive)
     db.commit()
     db.refresh(hive)
+
+    # Automatically create initial IoT state for the new hive
+    from app.models.iot_hive_state import IoTHiveState
+    iot_state = IoTHiveState(hive_id=hive.id)
+    db.add(iot_state)
+    db.commit()
+
     return hive
 
 

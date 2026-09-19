@@ -18,6 +18,7 @@ from app.models.order import Order, OrderItem, OrderStatus
 from app.models.payment import Payment, PaymentStatus
 from app.models.traceability_event import TraceEventType, TraceabilityEvent
 from app.models.user import User
+from app.models.iot_hive_state import IoTHiveState
 
 __all__ = [
     "User",
@@ -45,6 +46,7 @@ __all__ = [
     "AlertSeverity",
     "AlertStatus",
     "AlertType",
+    "IoTHiveState",
 ]
 
 
