@@ -20,18 +20,13 @@ logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
-from sqlalchemy.pool import NullPool
-
 # ── Engine ─────────────────────────────────────────────────────────────────
 # pool_pre_ping transparently reconnects after idle-connection drops.
 # echo is restricted to development so production logs stay clean.
-# We use NullPool to disable SQLAlchemy's internal connection pooling because
-# Vercel Serverless Functions + Supabase PgBouncer handle pooling for us.
 engine = create_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,
     echo=settings.APP_ENV == "development",
-    poolclass=NullPool
 )
 
 # ── Session factory ────────────────────────────────────────────────────────
