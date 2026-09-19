@@ -258,6 +258,14 @@ body {
   color: var(--primary);
 }
 
+.card-hive-code {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 2px;
+  letter-spacing: 0.2px;
+}
+
 .card-badges {
   display: flex;
   gap: 5px;
@@ -392,7 +400,14 @@ body {
   border-bottom: 1px solid var(--border);
 }
 .modal-hive-id { font-size: 1.4rem; font-weight: 700; color: var(--primary); }
-.modal-sub     { font-size: 0.8rem; color: var(--text-muted); }
+.modal-hive-code {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-top: 2px;
+  letter-spacing: 0.3px;
+}
+.modal-sub     { font-size: 0.75rem; color: var(--text-muted); margin-top: 1px; }
 .modal-close {
   background: transparent;
   border: 1px solid var(--border);

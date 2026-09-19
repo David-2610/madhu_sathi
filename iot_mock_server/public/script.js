@@ -99,10 +99,15 @@ function cardHTML(hiveId, data) {
   const isRunning = !!simRunning[hiveId];
   const ts = data.last_updated || data.timestamp;
   const timeStr = ts ? new Date(ts).toLocaleTimeString() : '--';
+  const hiveCode = data.hive_code || '--';
+  const hiveType = data.hive_type || '';
 
   return `
     <div class="card-header">
-      <div class="card-hive-id">${hiveId}</div>
+      <div>
+        <div class="card-hive-id">${hiveId}</div>
+        <div class="card-hive-code">${hiveCode}${hiveType ? ' &middot; ' + hiveType : ''}</div>
+      </div>
       <div class="card-badges">
         <span class="badge ${data.status || ''}">${data.status || '--'}</span>
         <span class="badge ${data.activity_level || ''}">${data.activity_level || '--'}</span>
@@ -111,7 +116,7 @@ function cardHTML(hiveId, data) {
     <div class="card-metrics">
       <div class="card-metric">
         <div class="cm-label">Temp</div>
-        <div class="cm-val">${fmtNum(data.temperature, 1)}<span class="cm-unit"> °C</span></div>
+        <div class="cm-val">${fmtNum(data.temperature, 1)}<span class="cm-unit"> &deg;C</span></div>
       </div>
       <div class="card-metric">
         <div class="cm-label">Humidity</div>
@@ -126,7 +131,7 @@ function cardHTML(hiveId, data) {
         <div class="cm-val">${fmtNum(data.sound_level, 1)}<span class="cm-unit"> dB</span></div>
       </div>
       <div class="card-metric">
-        <div class="cm-label">CO₂</div>
+        <div class="cm-label">CO&sup2;</div>
         <div class="cm-val">${Math.round(data.co2_level || 0)}<span class="cm-unit"> ppm</span></div>
       </div>
     </div>
@@ -136,7 +141,7 @@ function cardHTML(hiveId, data) {
         ${isRunning ? 'Simulating' : 'Idle'}
       </div>
       <div style="font-size:0.68rem;color:var(--text-muted)">${timeStr}</div>
-      <button class="card-open-btn" onclick="openModal('${hiveId}', event)">Configure →</button>
+      <button class="card-open-btn" onclick="openModal('${hiveId}', event)">Configure &rarr;</button>
     </div>`;
 }
 
@@ -196,6 +201,13 @@ function openModal(hiveId, evt) {
   const data  = hives[hiveId] || {};
 
   document.getElementById('modal-hive-id').textContent = hiveId;
+  // Show the human-readable hive code as the subtitle
+  const codeEl = document.getElementById('modal-hive-code');
+  if (codeEl) {
+    const hiveCode = data.hive_code || '--';
+    const hiveType = data.hive_type ? ` · ${data.hive_type}` : '';
+    codeEl.textContent = hiveCode + hiveType;
+  }
   populateModal(hiveId, data);
   updateModalSimStatus(hiveId);
 
@@ -216,6 +228,13 @@ function populateModal(hiveId, data) {
   // Status badges
   setModalBadge('modal-status-badge',   data.status);
   setModalBadge('modal-activity-badge', data.activity_level);
+
+  // Keep hive code subtitle in sync
+  const codeEl = document.getElementById('modal-hive-code');
+  if (codeEl && data.hive_code) {
+    const hiveType = data.hive_type ? ` · ${data.hive_type}` : '';
+    codeEl.textContent = data.hive_code + hiveType;
+  }
 
   // Timestamp
   const ts = data.last_updated || data.timestamp;

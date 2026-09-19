@@ -52,7 +52,13 @@ const lastBroadcasts = {};
 const simIntervalIds = {};
 
 async function getHiveState(hiveId) {
-  const result = await pool.query('SELECT * FROM iot_hive_states WHERE hive_id = $1', [hiveId]);
+  const result = await pool.query(
+    `SELECT s.*, h.hive_code, h.hive_type
+     FROM iot_hive_states s
+     JOIN hives h ON h.id = s.hive_id
+     WHERE s.hive_id = $1`,
+    [hiveId]
+  );
   if (result.rows.length > 0) {
     return result.rows[0];
   }
@@ -60,7 +66,12 @@ async function getHiveState(hiveId) {
 }
 
 async function getAllHives() {
-  const result = await pool.query('SELECT * FROM iot_hive_states');
+  const result = await pool.query(
+    `SELECT s.*, h.hive_code, h.hive_type
+     FROM iot_hive_states s
+     JOIN hives h ON h.id = s.hive_id
+     ORDER BY h.hive_code`
+  );
   return result.rows;
 }
 
