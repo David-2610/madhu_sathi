@@ -70,5 +70,6 @@ data class TraceabilityDetailDto(
     @Json(name = "apiary_location") val apiaryLocation: String? = null,
     @Json(name = "quality_grade") val qualityGrade: String? = null,
     @Json(name = "moisture_percentage") val moisturePercentage: Double? = null,
+    @Json(name = "batch_hash") val batchHash: String? = null,
     @Json(name = "events") val events: List<ProductEventDto> = emptyList()
 )

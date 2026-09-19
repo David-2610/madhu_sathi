@@ -1,0 +1,162 @@
+:root {
+  --bg-color: #f4f7f6;
+  --text-color: #333;
+  --panel-bg: #fff;
+  --primary: #f0a500;
+  --primary-hover: #cf8c00;
+  --secondary: #6c757d;
+  --healthy: #28a745;
+  --warning: #ffc107;
+  --critical: #dc3545;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  margin: 0;
+  padding: 20px;
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+header h1 {
+  text-align: center;
+  color: var(--primary);
+  margin-bottom: 30px;
+}
+
+.dashboard {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .dashboard {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel {
+  background: var(--panel-bg);
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+
+.panel h2 {
+  margin-top: 0;
+  border-bottom: 2px solid #eee;
+  padding-bottom: 10px;
+  font-size: 1.2rem;
+}
+
+/* Status Badges */
+.status-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 15px;
+  font-weight: bold;
+}
+
+.badge {
+  padding: 5px 10px;
+  border-radius: 15px;
+  color: white;
+  font-size: 0.9rem;
+}
+
+.badge.Healthy { background-color: var(--healthy); }
+.badge.Warning { background-color: var(--warning); color: #333; }
+.badge.Critical { background-color: var(--critical); }
+
+.badge.Low { background-color: #17a2b8; }
+.badge.Normal { background-color: var(--healthy); }
+.badge.Aggressive { background-color: var(--critical); }
+
+/* Metrics */
+.metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.metric {
+  background: #f8f9fa;
+  padding: 10px;
+  border-radius: 5px;
+  text-align: center;
+}
+
+.metric .label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--secondary);
+  text-transform: uppercase;
+}
+
+.metric .value {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: var(--primary);
+}
+
+.timestamp {
+  text-align: right;
+  font-size: 0.8rem;
+  color: var(--secondary);
+  margin-top: 15px;
+}
+
+/* Buttons */
+.button-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+button {
+  background-color: var(--primary);
+  color: white;
+  border: none;
+  padding: 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background 0.2s;
+}
+
+button:hover {
+  background-color: var(--primary-hover);
+}
+
+button.btn-secondary { background-color: var(--secondary); }
+button.btn-start { background-color: var(--healthy); }
+button.btn-stop { background-color: var(--critical); }
+
+/* Sliders */
+.slider-group {
+  margin-bottom: 15px;
+}
+
+.slider-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 0.9rem;
+}
+
+input[type=range] {
+  width: 100%;
+}
+
+.control-group {
+  margin-bottom: 15px;
+}
+.control-group input {
+  padding: 5px;
+  width: 80px;
+}

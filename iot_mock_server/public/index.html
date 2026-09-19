@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mock IoT Simulation Platform</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🐝 Hive IoT Simulation Control</h1>
+    </header>
+
+    <main class="dashboard">
+      <!-- Live Status Section -->
+      <section class="panel live-data">
+        <h2>Live Dashboard</h2>
+        <div class="status-header">
+          <div>Status: <span id="status-badge" class="badge">Loading...</span></div>
+          <div>Activity: <span id="activity-badge" class="badge">Loading...</span></div>
+        </div>
+        
+        <div class="metrics">
+          <div class="metric">
+            <span class="label">Temperature</span>
+            <span class="value" id="val-temp">--</span> °C
+          </div>
+          <div class="metric">
+            <span class="label">Humidity</span>
+            <span class="value" id="val-hum">--</span> %
+          </div>
+          <div class="metric">
+            <span class="label">Weight</span>
+            <span class="value" id="val-weight">--</span> kg
+          </div>
+          <div class="metric">
+            <span class="label">Sound Level</span>
+            <span class="value" id="val-sound">--</span> dB
+          </div>
+          <div class="metric">
+            <span class="label">CO2 Level</span>
+            <span class="value" id="val-co2">--</span> ppm
+          </div>
+        </div>
+        <div class="timestamp">Last Update: <span id="val-timestamp">--</span></div>
+      </section>
+
+      <!-- Scenario Control -->
+      <section class="panel scenarios">
+        <h2>Presets & Scenarios</h2>
+        <div class="button-grid">
+          <button onclick="setScenario('healthy')">Healthy</button>
+          <button onclick="setScenario('overheating')">Overheating</button>
+          <button onclick="setScenario('humidity')">High Humidity</button>
+          <button onclick="setScenario('stress')">Colony Stress</button>
+          <button onclick="setScenario('low')">Low Activity</button>
+        </div>
+        <div class="button-grid" style="margin-top: 15px;">
+          <button onclick="resetState()" class="btn-secondary">Reset to Default</button>
+        </div>
+      </section>
+
+      <!-- Simulation Engine -->
+      <section class="panel simulation">
+        <h2>Simulation Engine</h2>
+        <div class="control-group">
+          <label for="sim-interval">Interval (ms):</label>
+          <input type="number" id="sim-interval" value="2000" min="1000" step="500">
+        </div>
+        <div class="button-grid">
+          <button onclick="startSimulation()" class="btn-start">Start Auto-Stream</button>
+          <button onclick="stopSimulation()" class="btn-stop">Stop Stream</button>
+        </div>
+      </section>
+
+      <!-- Manual Adjustments -->
+      <section class="panel manual">
+        <h2>Manual Override</h2>
+        
+        <div class="slider-group">
+          <label>Temperature (<span id="slide-val-temp">34</span> °C)</label>
+          <input type="range" id="slider-temp" min="0" max="60" step="0.5" value="34" oninput="updateValue('temperature', this.value)">
+        </div>
+        <div class="slider-group">
+          <label>Humidity (<span id="slide-val-hum">60</span> %)</label>
+          <input type="range" id="slider-hum" min="0" max="100" step="1" value="60" oninput="updateValue('humidity', this.value)">
+        </div>
+        <div class="slider-group">
+          <label>Weight (<span id="slide-val-weight">30</span> kg)</label>
+          <input type="range" id="slider-weight" min="1" max="100" step="0.5" value="30" oninput="updateValue('weight', this.value)">
+        </div>
+        <div class="slider-group">
+          <label>Sound Level (<span id="slide-val-sound">50</span> dB)</label>
+          <input type="range" id="slider-sound" min="0" max="120" step="1" value="50" oninput="updateValue('sound_level', this.value)">
+        </div>
+        <div class="slider-group">
+          <label>CO2 Level (<span id="slide-val-co2">700</span> ppm)</label>
+          <input type="range" id="slider-co2" min="300" max="2000" step="10" value="700" oninput="updateValue('co2_level', this.value)">
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
