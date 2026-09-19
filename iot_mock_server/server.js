@@ -279,6 +279,35 @@ app.post([`${API_BASE}/stop-simulation/:hiveId`], (req, res) => {
   }
 });
 
+app.post(`${API_BASE}/simulate-all`, async (req, res) => {
+  const hives = await getAllHives();
+  let interval = req.body.interval || 2000;
+  if (interval < 1000) interval = 1000;
+
+  let startedCount = 0;
+  for (const hive of hives) {
+    const started = await startSimForHive(hive.hive_id, interval);
+    if (started) startedCount++;
+  }
+  
+  sendSuccess(res, { running: true, interval, startedCount }, `Simulations started for ${startedCount} hives`);
+});
+
+app.post(`${API_BASE}/stop-simulation-all`, async (req, res) => {
+  const hives = await getAllHives();
+  let stoppedCount = 0;
+  
+  for (const hive of hives) {
+    if (simIntervalIds[hive.hive_id]) {
+      clearInterval(simIntervalIds[hive.hive_id]);
+      delete simIntervalIds[hive.hive_id];
+      stoppedCount++;
+    }
+  }
+  
+  sendSuccess(res, { stoppedCount }, `Simulations stopped for ${stoppedCount} hives`);
+});
+
 server.listen(PORT, () => {
   console.log(`IoT Mock Server connected to PostgreSQL running on port ${PORT}`);
 });
