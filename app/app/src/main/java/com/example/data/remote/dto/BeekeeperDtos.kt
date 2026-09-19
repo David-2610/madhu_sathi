@@ -43,8 +43,8 @@ data class CreateApiaryRequest(
 data class HiveDto(
     @Json(name = "id") val id: String,
     @Json(name = "apiary_id") val apiaryId: String,
-    @Json(name = "hive_number") val hiveNumber: String,
-    @Json(name = "bee_species") val beeSpecies: String? = null,
+    @Json(name = "hive_code") val hiveCode: String,
+    @Json(name = "hive_type") val hiveType: String? = null,
     @Json(name = "installation_date") val installationDate: String? = null,
     @Json(name = "status") val status: String = "ACTIVE",
     @Json(name = "health_score") val healthScore: Int? = 100
@@ -52,8 +52,8 @@ data class HiveDto(
 
 @JsonClass(generateAdapter = true)
 data class CreateHiveRequest(
-    @Json(name = "hive_number") val hiveNumber: String,
-    @Json(name = "bee_species") val beeSpecies: String? = null,
+    @Json(name = "hive_code") val hiveCode: String,
+    @Json(name = "hive_type") val hiveType: String,
     @Json(name = "installation_date") val installationDate: String? = null,
     @Json(name = "status") val status: String = "ACTIVE"
 )

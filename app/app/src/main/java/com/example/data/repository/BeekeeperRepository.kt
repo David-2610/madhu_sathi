@@ -119,8 +119,8 @@ class BeekeeperRepository(
                 HiveEntity(
                     id = it.id,
                     apiaryId = it.apiaryId,
-                    hiveNumber = it.hiveNumber,
-                    beeSpecies = it.beeSpecies,
+                    hiveCode = it.hiveCode,
+                    hiveType = it.hiveType,
                     installationDate = it.installationDate,
                     status = it.status,
                     healthScore = it.healthScore ?: 100,
@@ -136,20 +136,20 @@ class BeekeeperRepository(
 
     suspend fun createHive(
         apiaryId: String,
-        hiveNumber: String,
-        beeSpecies: String?,
+        hiveCode: String,
+        hiveType: String,
         installationDate: String?,
         status: String = "ACTIVE"
     ): ApiResult<HiveDto> = withContext(Dispatchers.IO) {
         try {
-            val request = CreateHiveRequest(hiveNumber, beeSpecies, installationDate, status)
+            val request = CreateHiveRequest(hiveCode, hiveType, installationDate, status)
             val hive = apiService.createHive(apiaryId, request)
             dao.insertHive(
                 HiveEntity(
                     id = hive.id,
                     apiaryId = hive.apiaryId,
-                    hiveNumber = hive.hiveNumber,
-                    beeSpecies = hive.beeSpecies,
+                    hiveCode = hive.hiveCode,
+                    hiveType = hive.hiveType,
                     installationDate = hive.installationDate,
                     status = hive.status,
                     healthScore = hive.healthScore ?: 100,

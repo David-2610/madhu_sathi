@@ -41,11 +41,16 @@ data class BeekeeperUiState(
     // Assistant
     val assistantQuestion: String = "",
     val isAskingAssistant: Boolean = false,
-    val assistantResponse: AssistantResponseDto? = null
+    val assistantResponse: AssistantResponseDto? = null,
+    
+    // WebSocket
+    val connectionState: com.example.core.network.WebSocketState = com.example.core.network.WebSocketState.DISCONNECTED,
+    val aiSummary: AiSummaryDto? = null
 )
 
 class BeekeeperViewModel(
-    private val beekeeperRepository: BeekeeperRepository
+    private val beekeeperRepository: BeekeeperRepository,
+    private val webSocketManager: com.example.core.network.WebSocketManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BeekeeperUiState())
@@ -54,6 +59,79 @@ class BeekeeperViewModel(
     init {
         loadProfile()
         loadApiaries()
+        observeWebSocket()
+    }
+
+    private fun observeWebSocket() {
+        viewModelScope.launch {
+            webSocketManager.connectionState.collect { state ->
+                _uiState.value = _uiState.value.copy(connectionState = state)
+            }
+        }
+
+        viewModelScope.launch {
+            webSocketManager.events.collect { event ->
+                handleWebSocketEvent(event)
+            }
+        }
+    }
+
+    private fun handleWebSocketEvent(event: WebSocketEvent) {
+        val selectedHiveId = _uiState.value.selectedHive?.id
+        if (selectedHiveId == null) return
+
+        when (event) {
+            is WebSocketEvent.IotUpdate -> {
+                if (event.hiveId == selectedHiveId) {
+                    val currentHealth = _uiState.value.hiveHealth
+                    val newHealth = currentHealth?.copy(
+                        temperatureC = event.temperatureC,
+                        humidityPct = event.humidityPct,
+                        weightKg = event.weightKg,
+                        healthScore = event.healthScore,
+                        status = if (event.healthScore < 50) "CRITICAL" else if (event.healthScore < 80) "WARNING" else "NORMAL"
+                    ) ?: HiveHealthDto(
+                        hiveId = event.hiveId,
+                        temperatureC = event.temperatureC,
+                        humidityPct = event.humidityPct,
+                        weightKg = event.weightKg,
+                        healthScore = event.healthScore,
+                        status = if (event.healthScore < 50) "CRITICAL" else if (event.healthScore < 80) "WARNING" else "NORMAL"
+                    )
+                    _uiState.value = _uiState.value.copy(hiveHealth = newHealth)
+                }
+            }
+            is WebSocketEvent.Alert -> {
+                if (event.hiveId == selectedHiveId) {
+                    val newAlert = HiveAlertDto(
+                        id = event.alertId,
+                        hiveId = event.hiveId,
+                        alertType = "REAL_TIME",
+                        severity = event.severity,
+                        message = event.message,
+                        createdAt = "Just now"
+                    )
+                    _uiState.value = _uiState.value.copy(
+                        alerts = listOf(newAlert) + _uiState.value.alerts
+                    )
+                }
+            }
+            is WebSocketEvent.AiAnalysis -> {
+                if (event.hiveId == selectedHiveId) {
+                    _uiState.value = _uiState.value.copy(
+                        aiSummary = AiSummaryDto(
+                            conditionSummary = event.conditionSummary,
+                            explanation = event.explanation,
+                            recommendedSteps = event.recommendedSteps
+                        )
+                    )
+                }
+            }
+            is WebSocketEvent.InitialData -> {
+                loadHiveHealth(selectedHiveId)
+                loadAlerts(selectedHiveId)
+            }
+        }
     }
 
     fun loadProfile() {
@@ -158,14 +236,14 @@ class BeekeeperViewModel(
         }
     }
 
-    fun createHive(apiaryId: String, hiveNumber: String, species: String?) {
+    fun createHive(apiaryId: String, hiveCode: String, hiveType: String) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
-            when (val res = beekeeperRepository.createHive(apiaryId, hiveNumber, species, null)) {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null, successMessage = null)
+            when (val res = beekeeperRepository.createHive(apiaryId, hiveCode, hiveType, null)) {
                 is ApiResult.Success -> {
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        successMessage = "Hive #$hiveNumber added!"
+                        successMessage = "Hive $hiveCode added!"
                     )
                     loadHivesForApiary(apiaryId)
                 }
@@ -178,10 +256,11 @@ class BeekeeperViewModel(
     }
 
     fun selectHive(hive: HiveDto) {
-        _uiState.value = _uiState.value.copy(selectedHive = hive)
+        _uiState.value = _uiState.value.copy(selectedHive = hive, aiSummary = null)
         loadHiveHealth(hive.id)
         loadHarvests(hive.id)
         loadAlerts(hive.id)
+        webSocketManager.connect()
     }
 
     fun loadHarvests(hiveId: String) {

@@ -37,7 +37,7 @@ interface HoneyChainDao {
     suspend fun clearApiaries()
 
     // Hives
-    @Query("SELECT * FROM hives WHERE apiaryId = :apiaryId ORDER BY hiveNumber ASC")
+    @Query("SELECT * FROM hives WHERE apiaryId = :apiaryId ORDER BY hiveCode ASC")
     fun getHivesByApiary(apiaryId: String): Flow<List<HiveEntity>>
 
     @Query("SELECT * FROM hives ORDER BY updatedAt DESC")

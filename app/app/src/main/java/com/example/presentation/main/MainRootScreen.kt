@@ -34,10 +34,10 @@ fun MainRootScreen(
     // Scoped ViewModels
     val authViewModel = remember { AuthViewModel(app.authRepository) }
     val buyerViewModel = remember { BuyerViewModel(app.buyerRepository) }
-    val beekeeperViewModel = remember { BeekeeperViewModel(app.beekeeperRepository) }
+    val beekeeperViewModel = remember { BeekeeperViewModel(app.beekeeperRepository, app.networkModule.webSocketManager) }
     val traceViewModel = remember { TraceViewModel(app.traceabilityRepository) }
     val adminViewModel = remember {
-        AdminViewModel(app.networkModule.apiService, app.traceabilityRepository)
+        AdminViewModel(app.adminRepository, app.traceabilityRepository, app.networkModule.webSocketManager)
     }
 
     var isRegistering by remember { mutableStateOf(false) }

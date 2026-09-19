@@ -37,8 +37,8 @@ data class ApiaryEntity(
 data class HiveEntity(
     @PrimaryKey val id: String,
     val apiaryId: String,
-    val hiveNumber: String,
-    val beeSpecies: String? = null,
+    val hiveCode: String,
+    val hiveType: String? = null,
     val installationDate: String? = null,
     val status: String = "ACTIVE",
     val healthScore: Int = 100,

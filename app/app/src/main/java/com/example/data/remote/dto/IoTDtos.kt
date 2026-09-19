@@ -74,3 +74,10 @@ data class SimulationResultDto(
     @Json(name = "status") val status: String,
     @Json(name = "message") val message: String
 )
+
+@JsonClass(generateAdapter = true)
+data class AiSummaryDto(
+    @Json(name = "condition_summary") val conditionSummary: String,
+    @Json(name = "explanation") val explanation: String,
+    @Json(name = "recommended_steps") val recommendedSteps: List<String>
+)

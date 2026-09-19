@@ -261,4 +261,16 @@ interface HoneyChainApiService {
 
     @POST("beekeeper/hives/{hive_id}/simulator/run")
     suspend fun runSimulator(@Path("hive_id") hiveId: String): SimulationResultDto
+
+    // ------------------------------------------
+    // KVIC DASHBOARD
+    // ------------------------------------------
+    @GET("kvic/overview")
+    suspend fun getKvicOverview(): KvicOverviewDto
+
+    @GET("kvic/hives")
+    suspend fun getKvicHives(): List<KvicHiveDto>
+
+    @GET("kvic/alerts")
+    suspend fun getKvicAlerts(): List<KvicAlertDto>
 }

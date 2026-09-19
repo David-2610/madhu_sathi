@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -34,6 +35,24 @@ fun BeekeeperIoTScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Connection State Banner
+            if (uiState.connectionState != com.example.core.network.WebSocketState.CONNECTED) {
+                val bgColor = if (uiState.connectionState == com.example.core.network.WebSocketState.RECONNECTING) 
+                                 MaterialTheme.colorScheme.errorContainer 
+                              else MaterialTheme.colorScheme.surfaceVariant
+                val txtColor = if (uiState.connectionState == com.example.core.network.WebSocketState.RECONNECTING) 
+                                  MaterialTheme.colorScheme.onErrorContainer 
+                               else MaterialTheme.colorScheme.onSurfaceVariant
+                
+                Box(modifier = Modifier.fillMaxWidth().background(bgColor).padding(4.dp), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "Status: ${uiState.connectionState.name}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = txtColor
+                    )
+                }
+            }
+
             // Selected Hive Banner
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -54,7 +73,7 @@ fun BeekeeperIoTScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = if (uiState.selectedHive != null) "Hive #${uiState.selectedHive!!.hiveNumber}" else "No Hive Selected",
+                            text = if (uiState.selectedHive != null) "Hive ${uiState.selectedHive!!.hiveCode}" else "No Hive Selected",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -121,6 +140,51 @@ fun BeekeeperIoTScreen(
                                 icon = Icons.Default.Favorite,
                                 modifier = Modifier.weight(1f)
                             )
+                        }
+                    }
+
+                    // AI Insights
+                    uiState.aiSummary?.let { aiSummary ->
+                        item {
+                            Text(
+                                text = "Live AI Analysis",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(
+                                        text = aiSummary.conditionSummary,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = aiSummary.explanation,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    if (aiSummary.recommendedSteps.isNotEmpty()) {
+                                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                        Text(
+                                            text = "Recommended Actions:",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        aiSummary.recommendedSteps.forEach { step ->
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.ArrowRight, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                Text(text = step, style = MaterialTheme.typography.bodySmall)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 

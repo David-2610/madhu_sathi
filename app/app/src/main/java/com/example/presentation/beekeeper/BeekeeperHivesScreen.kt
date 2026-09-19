@@ -29,8 +29,8 @@ fun BeekeeperHivesScreen(
         CreateHiveDialog(
             apiaryName = uiState.selectedApiary!!.name,
             onDismiss = { showCreateDialog = false },
-            onCreate = { number, species ->
-                viewModel.createHive(uiState.selectedApiary!!.id, number, species)
+            onCreate = { code, type ->
+                viewModel.createHive(uiState.selectedApiary!!.id, code, type)
                 showCreateDialog = false
             }
         )
@@ -149,12 +149,12 @@ private fun HiveCard(
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "Hive #${hive.hiveNumber}",
+                    text = "Hive ${hive.hiveCode}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "🐝 Species: ${hive.beeSpecies ?: "Apis cerana indica"}",
+                    text = "🐝 Type: ${hive.hiveType ?: "Langstroth"}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -186,10 +186,10 @@ private fun HiveCard(
 private fun CreateHiveDialog(
     apiaryName: String,
     onDismiss: () -> Unit,
-    onCreate: (number: String, species: String?) -> Unit
+    onCreate: (code: String, type: String) -> Unit
 ) {
-    var hiveNumber by remember { mutableStateOf("") }
-    var species by remember { mutableStateOf("Apis cerana indica") }
+    var hiveCode by remember { mutableStateOf("") }
+    var hiveType by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -197,14 +197,14 @@ private fun CreateHiveDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 HoneyOutlinedTextField(
-                    value = hiveNumber,
-                    onValueChange = { hiveNumber = it },
+                    value = hiveCode,
+                    onValueChange = { hiveCode = it },
                     label = "Hive Box Number / ID",
                     placeholder = "e.g. H-01"
                 )
                 HoneyOutlinedTextField(
-                    value = species,
-                    onValueChange = { species = it },
+                    value = hiveType,
+                    onValueChange = { hiveType = it },
                     label = "Bee Species",
                     placeholder = "e.g. Apis cerana indica, Apis mellifera"
                 )
@@ -212,8 +212,8 @@ private fun CreateHiveDialog(
         },
         confirmButton = {
             Button(
-                onClick = { onCreate(hiveNumber, species) },
-                enabled = hiveNumber.isNotBlank()
+                onClick = { onCreate(hiveCode, hiveType) },
+                enabled = hiveCode.isNotBlank() && hiveType.isNotBlank()
             ) {
                 Text("Add Hive")
             }

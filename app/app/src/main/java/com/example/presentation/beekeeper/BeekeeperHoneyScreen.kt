@@ -34,7 +34,7 @@ fun BeekeeperHoneyScreen(
     // Dialogs
     if (showCreateHarvestDialog && uiState.selectedHive != null) {
         CreateHarvestDialog(
-            hiveNumber = uiState.selectedHive!!.hiveNumber,
+            hiveCode = uiState.selectedHive!!.hiveCode,
             onDismiss = { showCreateHarvestDialog = false },
             onCreate = { date, qty, moisture, flora, notes ->
                 viewModel.createHarvest(uiState.selectedHive!!.id, date, qty, moisture, flora, notes)
@@ -196,7 +196,7 @@ private fun HarvestsTab(
         )
     } else if (uiState.harvests.isEmpty()) {
         EmptyView(
-            title = "No Harvests for Hive #${uiState.selectedHive.hiveNumber}",
+            title = "No Harvests for Hive ${uiState.selectedHive.hiveCode}",
             message = "Record harvested honey weight in kg and lab moisture %.",
             icon = Icons.Default.WaterDrop,
             actionLabel = "Record Harvest",
@@ -430,7 +430,7 @@ private fun ProductsTab(
 // Dialogs
 @Composable
 private fun CreateHarvestDialog(
-    hiveNumber: String,
+    hiveCode: String,
     onDismiss: () -> Unit,
     onCreate: (date: String, qty: Double, moisture: Double?, flora: String?, notes: String?) -> Unit
 ) {
@@ -442,7 +442,7 @@ private fun CreateHarvestDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Log Harvest from Hive #$hiveNumber") },
+        title = { Text("Log Harvest from Hive $hiveCode") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 HoneyOutlinedTextField(value = date, onValueChange = { date = it }, label = "Harvest Date (YYYY-MM-DD)")

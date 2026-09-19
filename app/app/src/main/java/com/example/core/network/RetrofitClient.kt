@@ -51,4 +51,10 @@ class NetworkModule(
         .addConverterFactory(MoshiConverterFactory.create(moshi))
         .build()
         .create(HoneyChainApiService::class.java)
+
+    val webSocketManager = WebSocketManager(
+        sessionManager = sessionManager,
+        client = okHttpClient,
+        moshi = moshi
+    )
 }

@@ -63,7 +63,7 @@ fun BeekeeperAssistantScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = if (uiState.selectedHive != null) "Hive #${uiState.selectedHive!!.hiveNumber}" else "Select a hive",
+                            text = if (uiState.selectedHive != null) "Hive ${uiState.selectedHive!!.hiveCode}" else "Select a hive",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )

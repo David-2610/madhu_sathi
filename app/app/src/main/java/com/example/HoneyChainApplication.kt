@@ -33,6 +33,9 @@ class HoneyChainApplication : Application() {
     lateinit var traceabilityRepository: TraceabilityRepository
         private set
 
+    lateinit var adminRepository: com.example.data.repository.AdminRepository
+        private set
+
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -46,6 +49,7 @@ class HoneyChainApplication : Application() {
         beekeeperRepository = BeekeeperRepository(networkModule.apiService, dao)
         buyerRepository = BuyerRepository(networkModule.apiService, dao)
         traceabilityRepository = TraceabilityRepository(networkModule.apiService)
+        adminRepository = com.example.data.repository.AdminRepository(networkModule.apiService)
 
         // Schedule periodic sync
         try {
