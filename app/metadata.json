@@ -1,6 +1,0 @@
-{
-  "name": "Honey Chain",
-  "description": "Smart beekeeping, honey traceability, and marketplace platform with role-based experiences for Buyers, Beekeepers, and KVIC Admins.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
