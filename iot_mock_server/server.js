@@ -4,7 +4,12 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
 const { Pool } = require('pg');
+const axios = require('axios');
 require('dotenv').config();
+
+// Backend webhook URL — notified on every hive state change
+const BACKEND_WEBHOOK_URL = process.env.BACKEND_WEBHOOK_URL || 'https://madhu-sathi.vercel.app/bridge/webhook';
+
 
 const app = express();
 const server = http.createServer(app);
@@ -117,13 +122,28 @@ async function updateHiveStateDB(hiveId, state) {
 }
 
 // -----------------------------------
-// 10. Real-Time Updates (Throttled Broadcast)
+// 10. Real-Time Updates (Throttled Broadcast + Backend Notification)
 // -----------------------------------
+
+// Notify the main backend of the updated hive state via webhook
+// This completes the pipeline: IoT Server → Backend → Frontend
+async function notifyBackend(hiveId, state) {
+  try {
+    await axios.post(BACKEND_WEBHOOK_URL, { hiveId, data: state }, { timeout: 8000 });
+    console.log(`Backend notified [${hiveId}] ✓`);
+  } catch (err) {
+    // Non-blocking — IoT server continues even if backend is temporarily unreachable
+    console.warn(`Backend notification failed [${hiveId}]:`, err.message);
+  }
+}
+
 function broadcastUpdate(hiveId, state) {
   const now = Date.now();
   if (!lastBroadcasts[hiveId] || now - lastBroadcasts[hiveId] >= 1000) {
     io.emit('iot-update', { hiveId, data: state });
     lastBroadcasts[hiveId] = now;
+    // Also notify the main backend so it can forward to the mobile frontend
+    notifyBackend(hiveId, state);
   }
 }
 

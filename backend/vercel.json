@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/bridge/sync",
+      "schedule": "* * * * *"
+    }
+  ]
+}

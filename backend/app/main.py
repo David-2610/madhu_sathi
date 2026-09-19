@@ -27,6 +27,7 @@ from app.api.routes import kvic as kvic_router
 from app.api.routes import marketplace as marketplace_router
 from app.api.routes import trace as trace_router
 from app.core.config import get_settings
+from app.api.routes import bridge as bridge_router
 from app.db import check_db_connection
 from app.services.iot_bridge import run_iot_bridge
 
@@ -152,4 +153,5 @@ app.include_router(buyer_router.router)
 app.include_router(iot_router.router)
 app.include_router(kvic_router.router)
 app.include_router(dev_router.router)
+app.include_router(bridge_router.router)
 

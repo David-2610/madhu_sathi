@@ -77,7 +77,7 @@ fun BeekeeperShellScreen(
                         selected = isSelected,
                         onClick = { 
                             selectedTab = index 
-                            // Reset sub-tabs when switching main tabs
+                            // Reset sub-tabs when switching main tabs to start from the root of each section
                             if (index == 1) apiarySubTab = 0
                             if (index == 4) learningSubTab = 0
                         },
