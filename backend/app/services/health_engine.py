@@ -314,42 +314,46 @@ class HealthEngine:
                 # Hardware active and installed, but waiting for initial reading
                 anomalies.append("NO_TELEMETRY_RECORDED")
                 max_severity = AlertSeverity.LOW
-        elif latest.timestamp < stale_cutoff:
-            anomalies.append("MISSING_TELEMETRY")
-            max_severity = AlertSeverity.MEDIUM
+        else:
+            latest_ts = latest.timestamp
+            if latest_ts.tzinfo is None:
+                latest_ts = latest_ts.replace(tzinfo=timezone.utc)
+            if latest_ts < stale_cutoff:
+                anomalies.append("MISSING_TELEMETRY")
+                max_severity = AlertSeverity.MEDIUM
 
-            # Check if MISSING_TELEMETRY alert exists or create
-            cooldown_delta = timedelta(minutes=settings.ALERT_COOLDOWN_MINUTES)
-            existing_missing_alert = (
-                db.query(HiveAlert)
-                .filter(
-                    HiveAlert.hive_id == hive.id,
-                    HiveAlert.alert_type == AlertType.MISSING_TELEMETRY.value,
-                    HiveAlert.status == AlertStatus.OPEN,
-                    HiveAlert.created_at >= (now_utc - cooldown_delta),
+                # Check if MISSING_TELEMETRY alert exists or create
+                cooldown_delta = timedelta(minutes=settings.ALERT_COOLDOWN_MINUTES)
+                existing_missing_alert = (
+                    db.query(HiveAlert)
+                    .filter(
+                        HiveAlert.hive_id == hive.id,
+                        HiveAlert.alert_type == AlertType.MISSING_TELEMETRY.value,
+                        HiveAlert.status == AlertStatus.OPEN,
+                        HiveAlert.created_at >= (now_utc - cooldown_delta),
+                    )
+                    .first()
                 )
-                .first()
-            )
-            if not existing_missing_alert:
-                new_missing_alert = HiveAlert(
-                    hive_id=hive.id,
-                    telemetry_id=latest.id,
-                    alert_type=AlertType.MISSING_TELEMETRY.value,
-                    severity=AlertSeverity.MEDIUM,
-                    title="Possible abnormal hive condition detected: Missing telemetry",
-                    message=(
-                        f"No telemetry has been received from Hive {hive.hive_code} since "
-                        f"{latest.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}, exceeding timeout "
-                        f"({settings.HIVE_TELEMETRY_STALE_MINUTES} minutes)."
-                    ),
-                    recommended_action=(
-                        "Inspect device power, battery level, antenna connection, and local wireless coverage."
-                    ),
-                    status=AlertStatus.OPEN,
-                    created_at=now_utc,
-                )
-                db.add(new_missing_alert)
-                db.commit()
+                if not existing_missing_alert:
+                    new_missing_alert = HiveAlert(
+                        hive_id=hive.id,
+                        telemetry_id=latest.id,
+                        alert_type=AlertType.MISSING_TELEMETRY.value,
+                        severity=AlertSeverity.MEDIUM,
+                        title="Possible abnormal hive condition detected: Missing telemetry",
+                        message=(
+                            f"No telemetry has been received from Hive {hive.hive_code} since "
+                            f"{latest_ts.strftime('%Y-%m-%d %H:%M:%S UTC')}, exceeding timeout "
+                            f"({settings.HIVE_TELEMETRY_STALE_MINUTES} minutes)."
+                        ),
+                        recommended_action=(
+                            "Inspect device power, battery level, antenna connection, and local wireless coverage."
+                        ),
+                        status=AlertStatus.OPEN,
+                        created_at=now_utc,
+                    )
+                    db.add(new_missing_alert)
+                    db.commit()
 
         # 3. 24h Statistics
         stats = (

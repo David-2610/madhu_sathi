@@ -22,6 +22,7 @@ from app.api.routes import beekeeper as beekeeper_router
 from app.api.routes import buyer as buyer_router
 from app.api.routes import health as health_router
 from app.api.routes import iot as iot_router
+from app.api.routes import kvic as kvic_router
 from app.api.routes import marketplace as marketplace_router
 from app.api.routes import trace as trace_router
 from app.core.config import get_settings
@@ -132,4 +133,5 @@ app.include_router(trace_router.router)
 app.include_router(marketplace_router.router)
 app.include_router(buyer_router.router)
 app.include_router(iot_router.router)
+app.include_router(kvic_router.router)
 

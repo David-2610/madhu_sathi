@@ -12,10 +12,14 @@ from decimal import Decimal
 import hashlib
 from typing import List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status, BackgroundTasks
 from jose import JWTError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+import asyncio
+
+from app.core.websockets import manager
+from app.services.ai_cache import trigger_ai_analysis
 
 from app.api.routes.beekeeper import get_current_beekeeper
 from app.core.security import decode_access_token
@@ -249,6 +253,7 @@ def ingest_telemetry(
     hive_id: int,
     payload: HiveTelemetryCreate,
     response: Response,
+    background_tasks: BackgroundTasks,
     auth_info: Tuple[Hive, Optional[HiveDevice], Optional[BeekeeperProfile]] = Depends(get_telemetry_auth),
     db: Session = Depends(get_db),
 ) -> HiveTelemetryResponse:
@@ -290,9 +295,39 @@ def ingest_telemetry(
     mqtt.publish_telemetry(hive_id, telemetry_dict)
 
     # 3. Evaluate health & trigger deduplicated alerts
-    HealthEngine.evaluate_telemetry(db, hive, reading)
+    _, anomalies, alerts = HealthEngine.evaluate_telemetry(db, hive, reading)
+    
+    resp_model = HiveTelemetryResponse.model_validate(reading)
+    
+    # Broadcast telemetry
+    background_tasks.add_task(manager.broadcast_kvic, "iot-update", hive_id, resp_model.model_dump(mode="json"))
+    
+    for alert in alerts:
+        background_tasks.add_task(manager.broadcast_kvic, "alert", hive_id, {
+            "alert_type": alert.alert_type,
+            "severity": alert.severity.value if hasattr(alert.severity, "value") else str(alert.severity),
+            "message": alert.message
+        })
+        
+    # Auto trigger AI if anomalies exist
+    if anomalies or alerts:
+        metrics_dict = {
+            "temperature_c": float(reading.temperature_c),
+            "humidity_percent": float(reading.humidity_percent),
+            "weight_kg": float(reading.weight_kg),
+            "sound_level": float(reading.sound_level),
+            "vibration_level": float(reading.vibration_level)
+        }
+        trigger_ai_analysis(
+            hive_id=hive.id, 
+            hive_code=hive.hive_code, 
+            metrics=metrics_dict, 
+            anomalies=anomalies,
+            is_simulated=False,
+            background_tasks=background_tasks
+        )
 
-    return HiveTelemetryResponse.model_validate(reading)
+    return resp_model
 
 
 @router.get(
@@ -527,6 +562,7 @@ def ask_hive_assistant(
 def run_simulation_scenario(
     hive_id: int,
     payload: SimulatorRunRequest,
+    background_tasks: BackgroundTasks,
     beekeeper: BeekeeperProfile = Depends(get_current_beekeeper),
     db: Session = Depends(get_db),
 ) -> SimulatorRunResponse:
@@ -561,12 +597,41 @@ def run_simulation_scenario(
     })
 
     # 3. Evaluate health
-    _, _, alerts = HealthEngine.evaluate_telemetry(db, hive, reading)
+    _, anomalies, alerts = HealthEngine.evaluate_telemetry(db, hive, reading)
     health_summary = HealthEngine.get_health_summary(db, hive)
+    
+    resp_model = HiveTelemetryResponse.model_validate(reading)
+    
+    # Broadcast
+    background_tasks.add_task(manager.broadcast_kvic, "iot-update", hive_id, resp_model.model_dump(mode="json"))
+    
+    for alert in alerts:
+        background_tasks.add_task(manager.broadcast_kvic, "alert", hive_id, {
+            "alert_type": alert.alert_type,
+            "severity": alert.severity.value if hasattr(alert.severity, "value") else str(alert.severity),
+            "message": alert.message
+        })
+        
+    if alerts or anomalies:
+        metrics_dict = {
+            "temperature_c": float(reading.temperature_c),
+            "humidity_percent": float(reading.humidity_percent),
+            "weight_kg": float(reading.weight_kg),
+            "sound_level": float(reading.sound_level),
+            "vibration_level": float(reading.vibration_level)
+        }
+        trigger_ai_analysis(
+            hive_id=hive.id, 
+            hive_code=hive.hive_code, 
+            metrics=metrics_dict, 
+            anomalies=anomalies,
+            is_simulated=True,
+            background_tasks=background_tasks
+        )
 
     return SimulatorRunResponse(
         scenario=payload.scenario,
-        telemetry=HiveTelemetryResponse.model_validate(reading),
+        telemetry=resp_model,
         health_status=health_summary.health_status,
         alerts_generated=[HiveAlertResponse.model_validate(a) for a in alerts],
     )
