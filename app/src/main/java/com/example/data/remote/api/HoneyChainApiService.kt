@@ -133,6 +133,9 @@ interface HoneyChainApiService {
         @Body request: CreateProductRequest
     ): ProductDto
 
+    @GET("beekeeper/products")
+    suspend fun getAllProducts(): List<ProductDto>
+
     @GET("beekeeper/batches/{batch_id}/products")
     suspend fun getProductsForBatch(@Path("batch_id") batchId: String): List<ProductDto>
 

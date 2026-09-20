@@ -391,8 +391,12 @@ class BeekeeperViewModel(
             _uiState.value = _uiState.value.copy(isLoading = true)
             when (val res = beekeeperRepository.updateListing(productId, isListed, price)) {
                 is ApiResult.Success -> {
+                    val updatedList = _uiState.value.products.map {
+                        if (it.id == productId) it.copy(isListed = isListed) else it
+                    }
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
+                        products = updatedList,
                         successMessage = if (isListed) "Product listed in public marketplace!" else "Product unlisted from marketplace"
                     )
                     _uiState.value.selectedBatch?.let { loadProductsForBatch(it.id) }
@@ -400,7 +404,9 @@ class BeekeeperViewModel(
                 is ApiResult.Error -> {
                     _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = res.message)
                 }
-                else -> {}
+                else -> {
+                    _uiState.value = _uiState.value.copy(isLoading = false)
+                }
             }
         }
     }

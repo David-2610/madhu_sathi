@@ -20,7 +20,7 @@ data class ProductDto(
     @Json(name = "price") val priceString: String? = null,
     @Json(name = "currency") val currency: String? = "INR",
     @Json(name = "is_available") val isAvailable: Boolean? = true,
-    @Json(name = "is_listed") val isListed: Boolean? = true,
+    @Json(name = "is_listed") val isListed: Boolean? = false,
     @Json(name = "batch_code") val batchCode: String? = null,
     @Json(name = "apiary_name") val apiaryName: String? = null,
     @Json(name = "district") val district: String? = null,

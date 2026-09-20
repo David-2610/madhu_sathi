@@ -6,11 +6,16 @@ import com.squareup.moshi.JsonClass
 @JsonClass(generateAdapter = true)
 data class ProductListingDto(
     @Json(name = "product_id") val productId: String = "",
-    @Json(name = "is_listed") val isListed: Boolean = true,
-    @Json(name = "price") val price: Double = 0.0,
+    @Json(name = "serial_number") val serialNumber: String? = null,
+    @Json(name = "is_listed") val isListed: Boolean = false,
+    @Json(name = "price") val priceString: String? = null,
     @Json(name = "currency") val currency: String = "INR",
+    @Json(name = "status") val status: String? = null,
+    @Json(name = "is_available_for_sale") val isAvailableForSale: Boolean? = null,
     @Json(name = "stock_quantity") val stockQuantity: Int = 1
-)
+) {
+    val price: Double get() = priceString?.toDoubleOrNull() ?: 450.0
+}
 
 @JsonClass(generateAdapter = true)
 data class UpdateListingRequest(

@@ -264,7 +264,38 @@ class BeekeeperRepository(
     suspend fun fetchProductsForBatch(batchId: String): ApiResult<List<ProductDto>> = withContext(Dispatchers.IO) {
         try {
             val list = apiService.getProductsForBatch(batchId)
-            ApiResult.Success(list)
+            val enriched = list.map { prod ->
+                try {
+                    val listing = apiService.getProductListing(prod.id)
+                    prod.copy(
+                        isListed = listing.isListed,
+                        priceString = listing.priceString ?: prod.priceString
+                    )
+                } catch (e: Exception) {
+                    prod
+                }
+            }
+            ApiResult.Success(enriched)
+        } catch (e: Exception) {
+            NetworkErrorMapper.map(e)
+        }
+    }
+
+    suspend fun fetchAllProducts(): ApiResult<List<ProductDto>> = withContext(Dispatchers.IO) {
+        try {
+            val list = apiService.getAllProducts()
+            val enriched = list.map { prod ->
+                try {
+                    val listing = apiService.getProductListing(prod.id)
+                    prod.copy(
+                        isListed = listing.isListed,
+                        priceString = listing.priceString ?: prod.priceString
+                    )
+                } catch (e: Exception) {
+                    prod
+                }
+            }
+            ApiResult.Success(enriched)
         } catch (e: Exception) {
             NetworkErrorMapper.map(e)
         }
