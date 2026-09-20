@@ -43,7 +43,12 @@ fun AdminShellScreen(
                         1 -> "Verify Digital Passports"
                         else -> "Admin Settings"
                     },
-                    subtitle = "Real-time AI monitoring & compliance"
+                    subtitle = "Real-time AI monitoring & compliance",
+                    actions = {
+                        IconButton(onClick = { adminViewModel.loadDashboardData() }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh Data")
+                        }
+                    }
                 )
                 // Connection State Banner
                 if (uiState.connectionState != WebSocketState.CONNECTED) {

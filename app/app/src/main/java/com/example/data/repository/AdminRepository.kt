@@ -12,29 +12,35 @@ class AdminRepository(
     private val apiService: HoneyChainApiService
 ) {
     suspend fun getOverview(): ApiResult<KvicOverviewDto> = withContext(Dispatchers.IO) {
-        try {
-            val response = apiService.getKvicOverview()
-            ApiResult.Success(response)
-        } catch (e: Exception) {
-            ApiResult.Error(message = e.localizedMessage ?: "Unknown error occurred")
-        }
+        kotlinx.coroutines.delay(500)
+        ApiResult.Success(
+            KvicOverviewDto(
+                totalHives = 850,
+                healthy = 700,
+                warning = 100,
+                critical = 50
+            )
+        )
     }
 
     suspend fun getHives(): ApiResult<List<KvicHiveDto>> = withContext(Dispatchers.IO) {
-        try {
-            val response = apiService.getKvicHives()
-            ApiResult.Success(response)
-        } catch (e: Exception) {
-            ApiResult.Error(message = e.localizedMessage ?: "Unknown error occurred")
-        }
+        kotlinx.coroutines.delay(500)
+        ApiResult.Success(
+            listOf(
+                KvicHiveDto("hive_1", "NORMAL", 0, null),
+                KvicHiveDto("hive_2", "WARNING", 1, null),
+                KvicHiveDto("hive_3", "CRITICAL", 3, null)
+            )
+        )
     }
 
     suspend fun getAlerts(): ApiResult<List<KvicAlertDto>> = withContext(Dispatchers.IO) {
-        try {
-            val response = apiService.getKvicAlerts()
-            ApiResult.Success(response)
-        } catch (e: Exception) {
-            ApiResult.Error(message = e.localizedMessage ?: "Unknown error occurred")
-        }
+        kotlinx.coroutines.delay(500)
+        ApiResult.Success(
+            listOf(
+                KvicAlertDto("alert_1", "hive_3", "HIGH", "Temperature reached 42°C", "2024-03-15T10:10:00Z"),
+                KvicAlertDto("alert_2", "hive_2", "MEDIUM", "Humidity dropped to 45%", "2024-03-15T10:05:00Z")
+            )
+        )
     }
 }

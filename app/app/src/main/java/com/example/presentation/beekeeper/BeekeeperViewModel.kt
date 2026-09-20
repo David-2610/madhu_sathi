@@ -56,9 +56,8 @@ data class BeekeeperUiState(
     val currentCo2Ppm: Double = 650.0,
 
     // Assistant
-    val assistantQuestion: String = "",
     val isAskingAssistant: Boolean = false,
-    val assistantResponse: AssistantResponseDto? = null,
+    val chatMessages: List<ChatMessage> = emptyList(),
     
     // WebSocket
     val connectionState: com.example.core.network.WebSocketState = com.example.core.network.WebSocketState.DISCONNECTED,
@@ -69,6 +68,8 @@ class BeekeeperViewModel(
     private val beekeeperRepository: BeekeeperRepository,
     private val webSocketManager: com.example.core.network.WebSocketManager
 ) : ViewModel() {
+
+    private val geminiChatService = com.example.domain.ai.GeminiChatService()
 
     private val _uiState = MutableStateFlow(BeekeeperUiState())
     val uiState: StateFlow<BeekeeperUiState> = _uiState.asStateFlow()
@@ -158,6 +159,16 @@ class BeekeeperViewModel(
                 is ApiResult.Error -> {}
                 else -> {}
             }
+        }
+    }
+
+    fun refreshData() {
+        loadProfile()
+        loadApiaries()
+        _uiState.value.selectedHive?.let {
+            loadHiveHealth(it.id)
+            loadHarvests(it.id)
+            loadAlerts(it.id)
         }
     }
 
@@ -750,27 +761,43 @@ class BeekeeperViewModel(
         }
     }
 
-    fun askAssistant(hiveId: String?, question: String) {
+    fun askAssistant(question: String) {
         if (question.isBlank()) return
-        val targetHiveId = hiveId ?: _uiState.value.selectedHive?.id ?: _uiState.value.hives.firstOrNull()?.id ?: "general_hive"
+        
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isAskingAssistant = true)
-            when (val res = beekeeperRepository.askAssistant(targetHiveId, question)) {
-                is ApiResult.Success -> {
-                    _uiState.value = _uiState.value.copy(
-                        isAskingAssistant = false,
-                        assistantResponse = res.data
-                    )
-                }
-                is ApiResult.Error -> {
-                    _uiState.value = _uiState.value.copy(
-                        isAskingAssistant = false,
-                        errorMessage = res.message
-                    )
-                }
-                else -> {}
-            }
+            // Add user message to UI immediately
+            val userMsg = ChatMessage(role = "user", text = question)
+            val currentMessages = _uiState.value.chatMessages.toMutableList()
+            currentMessages.add(userMsg)
+            _uiState.value = _uiState.value.copy(chatMessages = currentMessages, isAskingAssistant = true)
+
+            // Send to Gemini
+            val response = geminiChatService.sendMessage(question)
+            
+            // Add model response
+            val modelMsg = ChatMessage(role = "model", text = response)
+            currentMessages.add(modelMsg)
+            _uiState.value = _uiState.value.copy(chatMessages = currentMessages, isAskingAssistant = false)
         }
+    }
+
+    fun analyzeTelemetryWithGemini() {
+        val hive = _uiState.value.selectedHive
+        val health = _uiState.value.hiveHealth
+        val prompt = if (health != null) {
+            "Analyze this current telemetry for Hive ${hive?.hiveCode ?: "Unknown"}: " +
+            "Temp: ${health.temperatureC}°C, Humidity: ${health.humidityPct}%, " +
+            "Weight: ${health.weightKg}kg, Sound: ${health.soundLevelDb}dB. " +
+            "Provide a short diagnostic summary and any recommended actions."
+        } else {
+            "Analyze the telemetry for Hive ${hive?.hiveCode ?: "Unknown"}. Currently, temp is ${_uiState.value.currentTemp}°C, humidity is ${_uiState.value.currentHumidity}%, weight is ${_uiState.value.currentWeight}kg, and sound is ${_uiState.value.currentSoundDb}dB. Provide a concise diagnostic summary."
+        }
+        askAssistant(prompt)
+    }
+
+    fun clearChatHistory() {
+        geminiChatService.resetChat()
+        _uiState.value = _uiState.value.copy(chatMessages = emptyList())
     }
 
     fun clearMessages() {
@@ -788,4 +815,9 @@ private data class Quintuple<A, B, C, D, E>(
     val third: C,
     val fourth: D,
     val fifth: E
+)
+
+data class ChatMessage(
+    val role: String,
+    val text: String
 )

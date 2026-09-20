@@ -128,8 +128,12 @@ fun QrTraceScannerScreen(
                     }
                 } else {
                     // Camera Scanner View Mode
+                    val context = LocalContext.current
                     CameraPreviewBox(
                         onQrDetected = { detectedToken ->
+                            // Update input field so the user can verify the keyword visually
+                            inputToken = detectedToken
+                            android.widget.Toast.makeText(context, "Scanned: $detectedToken", android.widget.Toast.LENGTH_SHORT).show()
                             viewModel.searchTrace(detectedToken)
                         }
                     )
@@ -156,6 +160,7 @@ private fun CameraPreviewBox(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    var hasScanned by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
@@ -174,11 +179,52 @@ private fun CameraPreviewBox(
                             val preview = Preview.Builder().build().also {
                                 it.surfaceProvider = previewView.surfaceProvider
                             }
+                            
+                            val imageAnalysis = androidx.camera.core.ImageAnalysis.Builder()
+                                .setBackpressureStrategy(androidx.camera.core.ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                                .build()
+                                
+                            val scanner = com.google.mlkit.vision.barcode.BarcodeScanning.getClient(
+                                com.google.mlkit.vision.barcode.BarcodeScannerOptions.Builder()
+                                    .setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_QR_CODE)
+                                    .build()
+                            )
+                            
+                            imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(ctx)) { imageProxy ->
+                                @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
+                                val mediaImage = imageProxy.image
+                                if (mediaImage != null) {
+                                    val image = com.google.mlkit.vision.common.InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+                                    scanner.process(image)
+                                        .addOnSuccessListener { barcodes ->
+                                            if (barcodes.isNotEmpty() && !hasScanned) {
+                                                hasScanned = true
+                                                val rawValue = barcodes.first().rawValue
+                                                if (rawValue != null) {
+                                                    // Extract trace token if it's a URL
+                                                    val token = if (rawValue.contains("/trace/")) {
+                                                        rawValue.substringAfterLast("/")
+                                                    } else {
+                                                        rawValue
+                                                    }
+                                                    onQrDetected(token)
+                                                }
+                                            }
+                                        }
+                                        .addOnCompleteListener {
+                                            imageProxy.close()
+                                        }
+                                } else {
+                                    imageProxy.close()
+                                }
+                            }
+                            
                             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
                             cameraProvider.unbindAll()
-                            cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview)
-                        } catch (_: Exception) {
+                            cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageAnalysis)
+                        } catch (e: Exception) {
                             // Handled gracefully if camera hardware is unavailable
+                            e.printStackTrace()
                         }
                     }, ContextCompat.getMainExecutor(ctx))
                     previewView

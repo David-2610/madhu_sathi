@@ -63,6 +63,11 @@ fun BeekeeperShellScreen(
                     if (selectedTab == 1 && apiarySubTab == 1) {
                         apiarySubTab = 0
                     }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.refreshData() }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh Data")
+                    }
                 }
             )
         },

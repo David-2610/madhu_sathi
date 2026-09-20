@@ -343,7 +343,7 @@ fun BeekeeperLearningScreen(
                                     onAskAi = {
                                         customAiPrompt = guide.promptQuery
                                         activeSubTab = 3
-                                        viewModel.askAssistant(uiState.selectedHive?.id, guide.promptQuery)
+                                        viewModel.askAssistant(guide.promptQuery)
                                     }
                                 )
                             }
@@ -619,143 +619,115 @@ fun BeekeeperLearningScreen(
                 // TAB 3: INTEGRATED AI SPECIALIST
                 // -------------------------------------------------------------
                 3 -> {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    Column(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 80.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        item {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column {
-                                            Text(
-                                                text = "AI Apiary Specialist",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = if (uiState.selectedHive != null) "Diagnosing for Hive ${uiState.selectedHive!!.hiveCode}" else "General Apiary Diagnostic Mode",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        StatusBadge(status = "GEMINI ADVISOR")
-                                    }
-
-                                    Text(
-                                        text = "Quick Question Templates:",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold
-                                    )
-
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        val samplePrompts = listOf(
-                                            "How to reduce honey moisture under 20%?",
-                                            "Signs of varroa mite infestation?",
-                                            "Why is acoustic sound over 85dB?",
-                                            "How to prevent colony swarming?",
-                                            "Optimal temperature for brood incubation?"
+                        // Header
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = "AI Apiary Specialist",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
                                         )
-                                        items(samplePrompts) { prompt ->
-                                            SuggestionChip(
-                                                onClick = {
-                                                    customAiPrompt = prompt
-                                                    viewModel.askAssistant(uiState.selectedHive?.id, prompt)
-                                                },
-                                                label = { Text(prompt, maxLines = 1) }
-                                            )
-                                        }
+                                        Text(
+                                            text = if (uiState.selectedHive != null) "Diagnosing for Hive ${uiState.selectedHive!!.hiveCode}" else "General Apiary Diagnostic Mode",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
                                     }
-
-                                    HoneyOutlinedTextField(
-                                        value = customAiPrompt,
-                                        onValueChange = { customAiPrompt = it },
-                                        label = "Ask AI Any Colony or Honey Question",
-                                        placeholder = "e.g. My hive humidity is 82% and sound is 78dB, what should I check?",
-                                        singleLine = false,
-                                        modifier = Modifier.heightIn(min = 90.dp)
-                                    )
-
+                                    StatusBadge(status = "GEMINI ADVISOR")
+                                }
+                                
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     HoneyButton(
-                                        text = "Consult AI Specialist",
-                                        onClick = {
-                                            viewModel.askAssistant(uiState.selectedHive?.id, customAiPrompt)
-                                        },
-                                        isLoading = uiState.isAskingAssistant,
-                                        icon = Icons.Default.Psychology
+                                        text = "Analyze Current Telemetry",
+                                        onClick = { viewModel.analyzeTelemetryWithGemini() },
+                                        icon = Icons.Default.Sensors,
+                                        modifier = Modifier.weight(1f)
                                     )
+                                    OutlinedButton(onClick = { viewModel.clearChatHistory() }) {
+                                        Icon(Icons.Default.ClearAll, contentDescription = "Clear")
+                                    }
                                 }
                             }
                         }
 
-                        // AI Diagnostic Response Card
-                        uiState.assistantResponse?.let { resp ->
-                            item {
-                                Card(
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier.fillMaxWidth()
+                        // Chat History
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(bottom = 16.dp)
+                        ) {
+                            items(uiState.chatMessages) { msg ->
+                                val isUser = msg.role == "user"
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
                                 ) {
-                                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                                Icon(Icons.Default.SmartToy, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                                Text(
-                                                    text = "Specialist Recommendation",
-                                                    style = MaterialTheme.typography.titleMedium,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            }
-                                            StatusBadge(status = "ANALYSIS READY")
-                                        }
-
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = if (isUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                        modifier = Modifier.widthIn(max = 300.dp)
+                                    ) {
                                         Text(
-                                            text = resp.answer,
+                                            text = msg.text,
+                                            modifier = Modifier.padding(12.dp),
                                             style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurface
+                                            color = if (isUser) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                                         )
-
-                                        if (resp.recommendations.isNotEmpty()) {
-                                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                            Text(
-                                                text = "Field Action Steps:",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            resp.recommendations.forEach { step ->
-                                                Row(
-                                                    verticalAlignment = Alignment.Top,
-                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.CheckCircle,
-                                                        contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.primary,
-                                                        modifier = Modifier.size(16.dp).padding(top = 2.dp)
-                                                    )
-                                                    Text(
-                                                        text = step,
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                }
+                                    }
+                                }
+                            }
+                            if (uiState.isAskingAssistant) {
+                                item {
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+                                        Surface(
+                                            shape = RoundedCornerShape(16.dp),
+                                            color = MaterialTheme.colorScheme.surfaceVariant,
+                                        ) {
+                                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                                Text("Gemini is analyzing...", style = MaterialTheme.typography.bodyMedium)
                                             }
                                         }
                                     }
                                 }
+                            }
+                        }
+
+                        // Input Box
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = customAiPrompt,
+                                onValueChange = { customAiPrompt = it },
+                                placeholder = { Text("Ask Gemini a question...") },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(24.dp)
+                            )
+                            IconButton(
+                                onClick = { 
+                                    viewModel.askAssistant(customAiPrompt)
+                                    customAiPrompt = ""
+                                },
+                                modifier = Modifier.background(MaterialTheme.colorScheme.primary, CircleShape)
+                            ) {
+                                Icon(Icons.Default.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.onPrimary)
                             }
                         }
                     }
