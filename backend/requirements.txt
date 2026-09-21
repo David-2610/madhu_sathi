@@ -35,3 +35,5 @@ pillow==12.3.0
 pytest==8.3.5
 httpx==0.28.1      # required by FastAPI TestClient (async-capable)
 
+# HTTP Client (Gemini AI API & external services)
+requests>=2.31.0
