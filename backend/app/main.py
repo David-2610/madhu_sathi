@@ -155,3 +155,15 @@ app.include_router(kvic_router.router)
 app.include_router(dev_router.router)
 app.include_router(bridge_router.router)
 
+
+@app.get("/", tags=["Health"], summary="API Root Status")
+async def api_root() -> dict[str, str]:
+    """Root status endpoint providing basic metadata and documentation links."""
+    return {
+        "status": "online",
+        "app": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "docs": "/docs",
+        "health": "/health",
+    }
+
