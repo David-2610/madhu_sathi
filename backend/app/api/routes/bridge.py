@@ -28,72 +28,87 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/bridge", tags=["IoT Bridge"])
 
 
-async def _sync_hives(hive_id: Optional[int] = None) -> dict:
-    """Core sync logic: fetch from deployed IoT server and ingest directly into database."""
+def _sync_hives_sync(hive_id: Optional[int] = None) -> dict:
+    """Synchronous sync logic run in background thread pool."""
     results = {"synced": [], "skipped_unchanged": [], "errors": []}
+    import requests
 
-    async with httpx.AsyncClient() as client:
-        try:
-            url = f"{IOT_SERVER_URL}/iot-data" if not hive_id else f"{IOT_SERVER_URL}/iot-data/{hive_id}"
-            resp = await client.get(url, timeout=8)
-            if resp.status_code != 200:
-                return {"error": f"IoT server returned HTTP {resp.status_code}"}
-            payload = resp.json()
-        except Exception as e:
-            return {"error": f"IoT server unreachable: {e}"}
+    try:
+        url = f"{IOT_SERVER_URL}/iot-data" if not hive_id else f"{IOT_SERVER_URL}/iot-data/{hive_id}"
+        resp = requests.get(url, timeout=6)
+        if resp.status_code != 200:
+            return {"error": f"IoT server returned HTTP {resp.status_code}"}
+        payload = resp.json()
+    except Exception as e:
+        return {"error": f"IoT server unreachable: {e}"}
 
-        if hive_id:
-            entry = payload.get("data", {})
-            hive_entries = [entry] if entry else []
-        else:
-            hive_entries = payload.get("data", [])
+    if hive_id:
+        entry = payload.get("data", {})
+        hive_entries = [entry] if entry else []
+    else:
+        hive_entries = payload.get("data", [])
 
-        db = SessionLocal()
-        try:
-            for item in hive_entries:
-                h_id = item.get("hiveId") or item.get("hive_id")
-                iot_data = item.get("data", item)
-                if not h_id or not iot_data:
-                    continue
+    db = SessionLocal()
+    try:
+        for item in hive_entries:
+            h_id = item.get("hiveId") or item.get("hive_id")
+            iot_data = item.get("data", item)
+            if not h_id or not iot_data:
+                continue
 
-                try:
-                    h_int = int(h_id)
-                except (ValueError, TypeError):
-                    continue
+            try:
+                h_int = int(h_id)
+            except (ValueError, TypeError):
+                continue
 
-                # Look up hive
-                hive = db.query(Hive).filter(Hive.id == h_int).first()
-                if not hive and iot_data.get("hive_code"):
-                    hive = db.query(Hive).filter(Hive.hive_code == iot_data.get("hive_code")).first()
+            # Look up hive
+            hive = db.query(Hive).filter(Hive.id == h_int).first()
+            if not hive and iot_data.get("hive_code"):
+                hive = db.query(Hive).filter(Hive.hive_code == iot_data.get("hive_code")).first()
 
-                if not hive:
-                    results["errors"].append({"hive_id": h_int, "error": "Hive not found in database"})
-                    continue
+            if not hive:
+                results["errors"].append({"hive_id": h_int, "error": "Hive not found in database"})
+                continue
 
-                current_hash = _state_hash(iot_data)
-                _last_state_hash[hive.id] = current_hash
+            current_hash = _state_hash(iot_data)
+            _last_state_hash[hive.id] = current_hash
 
-                res = ingest_iot_data_entry(db, hive, iot_data)
-                if res:
-                    results["synced"].append({
-                        "hive_id": hive.id,
-                        "hive_code": hive.hive_code,
-                        "temperature_c": float(res.temperature_c),
-                        "humidity_percent": float(res.humidity_percent),
-                        "weight_kg": float(res.weight_kg),
-                    })
-                else:
-                    results["skipped_unchanged"].append(hive.id)
+            res = ingest_iot_data_entry(db, hive, iot_data)
+            if res:
+                results["synced"].append({
+                    "hive_id": hive.id,
+                    "hive_code": hive.hive_code,
+                    "temperature_c": float(res.temperature_c),
+                    "humidity_percent": float(res.humidity_percent),
+                    "weight_kg": float(res.weight_kg),
+                })
+            else:
+                results["skipped_unchanged"].append(hive.id)
 
-        finally:
-            db.close()
+    finally:
+        db.close()
 
     return results
 
 
-@router.post("/sync", summary="Sync deployed IoT server data directly into backend database")
+async def _sync_hives(hive_id: Optional[int] = None) -> dict:
+    import asyncio
+    return await asyncio.to_thread(_sync_hives_sync, hive_id)
+
+
+@router.get("/status", summary="Get IoT bridge status and last synchronized hashes")
+async def get_bridge_status():
+    """Returns IoT bridge operational status and cached hive hashes."""
+    return {
+        "status": "active",
+        "source_url": IOT_SERVER_URL,
+        "tracked_hives": list(_last_state_hash.keys()),
+    }
+
+
+@router.get("/sync", summary="Sync deployed IoT server data directly into backend database (GET)")
+@router.post("/sync", summary="Sync deployed IoT server data directly into backend database (POST)")
 async def sync_iot_to_backend(
-    background_tasks: BackgroundTasks,
     hive_id: Optional[int] = Query(None, description="Sync a specific hive only (omit for all hives)"),
 ):
     """
