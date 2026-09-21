@@ -712,31 +712,11 @@ class BeekeeperRepository(
 
     suspend fun askAssistant(hiveId: String, question: String): ApiResult<AssistantResponseDto> = withContext(Dispatchers.IO) {
         try {
-            val result = apiService.askHiveAssistant(hiveId, AssistantRequest(question))
+            val numericId = hiveId.filter { it.isDigit() }.ifBlank { "1" }
+            val result = apiService.askHiveAssistant(numericId, AssistantRequest(query = question))
             ApiResult.Success(result)
         } catch (e: Exception) {
-            // Intelligent domain-specific beekeeping assistant fallback
-            val lower = question.lowercase()
-            val answer = when {
-                "temp" in lower || "heat" in lower || "brood" in lower ->
-                    "Optimal brood nest incubation is 34.5°C to 35.5°C. Temperatures under 32°C lead to developmental defects or chilled brood. Temperatures above 38°C trigger intense fanning behavior and may melt comb wax."
-                "swarm" in lower || "sound" in lower || "piping" in lower ->
-                    "High acoustic activity (>85 dB) combined with queen piping and drone congregation indicates imminent swarming. Inspect lower frame margins for charged swarm cells and provide extra supers immediately."
-                "moisture" in lower || "kvic" in lower || "grade a" in lower || "ferment" in lower ->
-                    "KVIC Grade-A standard requires moisture content strictly below 20%. Excess moisture leads to osmophilic yeast fermentation. Only harvest combs that are at least 80% capped by the bees."
-                "varroa" in lower || "mite" in lower || "pest" in lower ->
-                    "For Varroa destructor, conduct a 24-hour sticky board natural mite drop count. If drop exceeds 10 mites/day, treat with organic oxalic acid vaporization or thymol pads after honey supers are removed."
-                "winter" in lower || "monsoon" in lower || "feed" in lower ->
-                    "During non-forage seasons, provide 2:1 sugar syrup feeding and maintain top hive ventilation to avoid condensation droplets falling on the winter bee cluster."
-                else ->
-                    "Colony diagnosis for Hive $hiveId: Maintain consistent telemetry monitoring, keep hive stands elevated with ant-traps, and verify queen laying patterns during bi-weekly inspections."
-            }
-            val recs = listOf(
-                "Verify sensor calibration against manual digital hygrometer/thermometer",
-                "Ensure hive entrance reducer matches seasonal forage density",
-                "Comply with KVIC Grade-A purity standards during extraction"
-            )
-            ApiResult.Success(AssistantResponseDto(answer = answer, recommendations = recs))
+            ApiResult.Error(-1, e.localizedMessage ?: "Failed to get response from Chat Bot")
         }
     }
 

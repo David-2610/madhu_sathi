@@ -69,7 +69,7 @@ class BeekeeperViewModel(
     private val webSocketManager: com.example.core.network.WebSocketManager
 ) : ViewModel() {
 
-    // AI assistant is handled by the backend (Gemini runs server-side).
+    // AI Chat Bot is handled securely by the backend.
 
     private val _uiState = MutableStateFlow(BeekeeperUiState())
     val uiState: StateFlow<BeekeeperUiState> = _uiState.asStateFlow()
@@ -743,13 +743,15 @@ class BeekeeperViewModel(
     }
 
     /**
-     * Send a question to the backend AI assistant (which calls Gemini server-side).
+     * Send a question to the backend AI Chat Bot.
      * The hive ID is included so the backend can contextualise the response with
      * live telemetry data.
      */
     fun askAssistant(question: String) {
         if (question.isBlank()) return
-        val hiveId = _uiState.value.selectedHive?.id ?: return
+        val hiveId = _uiState.value.selectedHive?.id
+            ?: _uiState.value.hives.firstOrNull()?.id
+            ?: "1"
 
         viewModelScope.launch {
             // Optimistically append the user message to the UI.
@@ -762,7 +764,7 @@ class BeekeeperViewModel(
             )
 
             // Route through the backend: POST /beekeeper/hives/{hive_id}/assistant
-            // The backend securely calls Gemini and returns a structured response.
+            // The backend securely calls AI Chat Bot and returns a structured response.
             when (val res = beekeeperRepository.askAssistant(hiveId, question)) {
                 is ApiResult.Success -> {
                     val dto = res.data
@@ -807,17 +809,17 @@ class BeekeeperViewModel(
                     )
                     android.util.Log.d(
                         "BeekeeperVM",
-                        "Assistant response received from backend (provider=${dto.provider}, mock=${dto.isMock})"
+                        "Chat Bot response received from backend (provider=${dto.provider}, mock=${dto.isMock})"
                     )
                 }
                 is ApiResult.Error -> {
                     android.util.Log.e(
                         "BeekeeperVM",
-                        "Assistant request failed: code=${res.code} message=${res.message}"
+                        "Chat Bot request failed: code=${res.code} message=${res.message}"
                     )
                     val errorMsg = ChatMessage(
                         role = "model",
-                        text = "⚠️ Unable to reach the AI assistant: ${res.message}"
+                        text = "⚠️ Unable to reach the Chat Bot: ${res.message}"
                     )
                     currentMessages.add(errorMsg)
                     _uiState.value = _uiState.value.copy(
@@ -832,7 +834,7 @@ class BeekeeperViewModel(
         }
     }
 
-    fun analyzeTelemetryWithGemini() {
+    fun analyzeTelemetryWithChatBot() {
         val hive = _uiState.value.selectedHive
         val health = _uiState.value.hiveHealth
         val prompt = if (health != null) {
@@ -848,6 +850,7 @@ class BeekeeperViewModel(
         }
         askAssistant(prompt)
     }
+
 
     fun clearChatHistory() {
         // No client-side chat session to reset – history is local to this ViewModel instance.

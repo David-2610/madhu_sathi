@@ -522,40 +522,53 @@ def ask_hive_assistant(
     Summarizes recent conditions and provides plain-language explanations
     and inspection steps without claiming disease certainty.
     """
-    hive = _get_verified_hive(db, hive_id, beekeeper)
-    summary = HealthEngine.get_health_summary(db, hive)
+    hive = get_hive_by_id(db, hive_id)
+    if hive is None or hive.apiary.beekeeper_id != beekeeper.id:
+        from app.models.apiary import Apiary
+        hive = db.query(Hive).join(Apiary).filter(Apiary.beekeeper_id == beekeeper.id).first()
 
-    metrics_dict = {
-        "temperature_c": float(summary.metrics.latest_reading.temperature_c) if summary.metrics.latest_reading else None,
-        "humidity_percent": float(summary.metrics.latest_reading.humidity_percent) if summary.metrics.latest_reading else None,
-        "weight_kg": float(summary.metrics.latest_reading.weight_kg) if summary.metrics.latest_reading else None,
-        "sound_level": float(summary.metrics.latest_reading.sound_level) if summary.metrics.latest_reading else None,
-        "vibration_level": float(summary.metrics.latest_reading.vibration_level) if summary.metrics.latest_reading else None,
-        "active_alerts_count": summary.metrics.active_alerts_count,
-    }
+    if hive is None:
+        metrics_dict = {}
+        anomalies = []
+        hive_code = "APIARY"
+        hive_id_val = hive_id
+    else:
+        summary = HealthEngine.get_health_summary(db, hive)
+        metrics_dict = {
+            "temperature_c": float(summary.metrics.latest_reading.temperature_c) if summary.metrics.latest_reading else None,
+            "humidity_percent": float(summary.metrics.latest_reading.humidity_percent) if summary.metrics.latest_reading else None,
+            "weight_kg": float(summary.metrics.latest_reading.weight_kg) if summary.metrics.latest_reading else None,
+            "sound_level": float(summary.metrics.latest_reading.sound_level) if summary.metrics.latest_reading else None,
+            "vibration_level": float(summary.metrics.latest_reading.vibration_level) if summary.metrics.latest_reading else None,
+            "active_alerts_count": summary.metrics.active_alerts_count,
+        }
+        anomalies = summary.anomalies
+        hive_code = hive.hive_code
+        hive_id_val = hive.id
 
     query = payload.query if payload else None
     ai_provider = get_ai_provider()
     try:
         explanation = ai_provider.generate_explanation(
-            hive_id=hive.id,
-            hive_code=hive.hive_code,
+            hive_id=hive_id_val,
+            hive_code=hive_code,
             metrics_summary=metrics_dict,
-            anomalies=summary.anomalies,
+            anomalies=anomalies,
             query=query,
         )
-    except Exception:
+    except Exception as err:
+        logger.warning("AI provider failed: %s; falling back to MockAIProvider", err)
         from app.services.ai.mock_provider import MockAIProvider
         explanation = MockAIProvider().generate_explanation(
-            hive_id=hive.id,
-            hive_code=hive.hive_code,
+            hive_id=hive_id_val,
+            hive_code=hive_code,
             metrics_summary=metrics_dict,
-            anomalies=summary.anomalies,
+            anomalies=anomalies,
             query=query,
         )
 
     return AIAssistantResponse(
-        hive_id=hive.id,
+        hive_id=hive_id_val,
         condition_summary=explanation.condition_summary,
         explanation=explanation.explanation,
         recommended_steps=explanation.recommended_steps,

@@ -647,13 +647,13 @@ fun BeekeeperLearningScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
-                                    StatusBadge(status = "GEMINI ADVISOR")
+                                    StatusBadge(status = "CHAT BOT")
                                 }
                                 
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     HoneyButton(
                                         text = "Analyze Current Telemetry",
-                                        onClick = { viewModel.analyzeTelemetryWithGemini() },
+                                        onClick = { viewModel.analyzeTelemetryWithChatBot() },
                                         icon = Icons.Default.Sensors,
                                         modifier = Modifier.weight(1f)
                                     )
@@ -699,7 +699,7 @@ fun BeekeeperLearningScreen(
                                         ) {
                                             Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                 CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                                                Text("Gemini is analyzing...", style = MaterialTheme.typography.bodyMedium)
+                                                Text("Chat bot is analyzing...", style = MaterialTheme.typography.bodyMedium)
                                             }
                                         }
                                     }
@@ -716,7 +716,7 @@ fun BeekeeperLearningScreen(
                             OutlinedTextField(
                                 value = customAiPrompt,
                                 onValueChange = { customAiPrompt = it },
-                                placeholder = { Text("Ask Gemini a question...") },
+                                placeholder = { Text("Ask Chat Bot a question...") },
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(24.dp)
                             )
