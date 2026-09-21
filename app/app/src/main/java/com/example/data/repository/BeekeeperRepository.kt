@@ -436,7 +436,96 @@ class BeekeeperRepository(
             val digitsOnly = hiveId.filter { it.isDigit() }
             val numericId = digitsOnly.toIntOrNull() ?: 1
 
-            // 1. First Priority: Socket.IO Engine handshake and initial-data snapshot
+            fun parseIotData(dataObj: org.json.JSONObject): TelemetryRequest? {
+                val temp = when {
+                    dataObj.has("temperature") -> dataObj.optDouble("temperature")
+                    dataObj.has("temperature_c") -> dataObj.optDouble("temperature_c")
+                    else -> return null
+                }
+                val hum = when {
+                    dataObj.has("humidity") -> dataObj.optDouble("humidity")
+                    dataObj.has("humidity_percent") -> dataObj.optDouble("humidity_percent")
+                    dataObj.has("humidity_pct") -> dataObj.optDouble("humidity_pct")
+                    else -> return null
+                }
+                val weight = when {
+                    dataObj.has("weight") -> dataObj.optDouble("weight")
+                    dataObj.has("weight_kg") -> dataObj.optDouble("weight_kg")
+                    else -> return null
+                }
+                val sound = when {
+                    dataObj.has("sound_level") -> dataObj.optDouble("sound_level")
+                    dataObj.has("sound_level_db") -> dataObj.optDouble("sound_level_db")
+                    else -> 48.0
+                }
+                val co2 = dataObj.optDouble("co2_level", 700.0)
+                val vibration = ((co2 - 300.0).coerceAtLeast(0.0) / 17.0 * (sound / 120.0)).coerceIn(0.0, 100.0)
+                return TelemetryRequest(
+                    temperatureC = temp,
+                    humidityPercent = hum,
+                    weightKg = weight,
+                    soundLevel = sound,
+                    vibrationLevel = vibration,
+                    batteryPercent = dataObj.optDouble("battery", 95.0)
+                )
+            }
+
+            // 1. First Priority: Direct REST query to /api/v1/iot-data/:hiveId
+            try {
+                val req = okhttp3.Request.Builder()
+                    .url("$baseUrl/api/v1/iot-data/$numericId")
+                    .get()
+                    .build()
+                val resp = iotClient.newCall(req).execute()
+                if (resp.isSuccessful) {
+                    val body = resp.body?.string().orEmpty()
+                    val json = org.json.JSONObject(body)
+                    val dataWrapper = json.optJSONObject("data")
+                    val targetObj = dataWrapper?.optJSONObject("data") ?: dataWrapper ?: json
+                    val result = parseIotData(targetObj)
+                    if (result != null) {
+                        return@withContext ApiResult.Success(result)
+                    }
+                }
+            } catch (ignored: Exception) {
+            }
+
+            // 2. Second Priority: All-hives query /api/v1/iot-data
+            try {
+                val req = okhttp3.Request.Builder()
+                    .url("$baseUrl/api/v1/iot-data")
+                    .get()
+                    .build()
+                val resp = iotClient.newCall(req).execute()
+                if (resp.isSuccessful) {
+                    val body = resp.body?.string().orEmpty()
+                    val json = org.json.JSONObject(body)
+                    val hivesArray = json.optJSONArray("data")
+                    if (hivesArray != null) {
+                        for (i in 0 until hivesArray.length()) {
+                            val item = hivesArray.getJSONObject(i)
+                            val hId = item.opt("hiveId")?.toString().orEmpty()
+                            val innerData = item.optJSONObject("data") ?: item
+                            val dId = innerData.opt("hive_id")?.toString().orEmpty()
+                            val code = innerData.optString("hive_code")
+                            if (hId.equals(hiveId, ignoreCase = true) ||
+                                dId.equals(hiveId, ignoreCase = true) ||
+                                code.equals(hiveId, ignoreCase = true) ||
+                                hId == numericId.toString() ||
+                                dId == numericId.toString()
+                            ) {
+                                val result = parseIotData(innerData)
+                                if (result != null) {
+                                    return@withContext ApiResult.Success(result)
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (ignored: Exception) {
+            }
+
+            // 3. Third Priority: Socket.IO Engine handshake and snapshot
             try {
                 val handshakeReq = okhttp3.Request.Builder()
                     .url("$baseUrl/socket.io/?EIO=4&transport=polling")
@@ -448,15 +537,12 @@ class BeekeeperRepository(
                     val sidMatch = Regex(""""sid"\s*:\s*"([^"]+)"""").find(handshakeBody)
                     if (sidMatch != null) {
                         val sid = sidMatch.groupValues[1]
-
-                        // Send Engine.IO client connect packet "40"
                         val connectReq = okhttp3.Request.Builder()
                             .url("$baseUrl/socket.io/?EIO=4&transport=polling&sid=$sid")
                             .post("40".toRequestBody("text/plain".toMediaTypeOrNull()))
                             .build()
                         iotClient.newCall(connectReq).execute().close()
 
-                        // Poll for snapshot data
                         val pollReq = okhttp3.Request.Builder()
                             .url("$baseUrl/socket.io/?EIO=4&transport=polling&sid=$sid")
                             .get()
@@ -472,36 +558,21 @@ class BeekeeperRepository(
                                         val arrayJson = org.json.JSONArray(packet.substring(jsonIdx))
                                         if (arrayJson.length() >= 2) {
                                             val hivesArray = arrayJson.getJSONArray(1)
-                                            var targetObj: org.json.JSONObject? = null
                                             for (i in 0 until hivesArray.length()) {
                                                 val item = hivesArray.getJSONObject(i)
                                                 val hId = item.opt("hiveId")?.toString().orEmpty()
-                                                val d = item.optJSONObject("data")
-                                                val dId = d?.opt("hive_id")?.toString().orEmpty()
+                                                val d = item.optJSONObject("data") ?: item
+                                                val dId = d.opt("hive_id")?.toString().orEmpty()
                                                 if (hId.equals(hiveId, ignoreCase = true) ||
                                                     dId.equals(hiveId, ignoreCase = true) ||
                                                     hId == numericId.toString() ||
                                                     dId == numericId.toString()
                                                 ) {
-                                                    targetObj = d ?: item
-                                                    break
+                                                    val result = parseIotData(d)
+                                                    if (result != null) {
+                                                        return@withContext ApiResult.Success(result)
+                                                    }
                                                 }
-                                            }
-                                            if (targetObj == null && hivesArray.length() > 0) {
-                                                val firstItem = hivesArray.getJSONObject(0)
-                                                targetObj = firstItem.optJSONObject("data") ?: firstItem
-                                            }
-                                            if (targetObj != null) {
-                                                return@withContext ApiResult.Success(
-                                                    TelemetryRequest(
-                                                        temperatureC = targetObj.optDouble("temperature", 34.8),
-                                                        humidityPercent = targetObj.optDouble("humidity", 58.0),
-                                                        weightKg = targetObj.optDouble("weight", 30.2),
-                                                        soundLevel = targetObj.optDouble("sound_level", 50.0),
-                                                        vibrationLevel = 0.5,
-                                                        batteryPercent = targetObj.optDouble("battery", 92.0)
-                                                    )
-                                                )
                                             }
                                         }
                                     }
@@ -511,68 +582,9 @@ class BeekeeperRepository(
                     }
                 }
             } catch (ignored: Exception) {
-                // Fallthrough to next strategy
             }
 
-            // 2. Second Priority: Read via Scenario/State query
-            try {
-                val scenReq = okhttp3.Request.Builder()
-                    .url("$baseUrl/api/v1/set-scenario/$numericId")
-                    .post("""{"scenario":"healthy"}""".toRequestBody("application/json".toMediaTypeOrNull()))
-                    .build()
-                val scenResp = iotClient.newCall(scenReq).execute()
-                if (scenResp.isSuccessful) {
-                    val body = scenResp.body?.string().orEmpty()
-                    val json = org.json.JSONObject(body)
-                    val data = json.optJSONObject("data")
-                    if (data != null) {
-                        return@withContext ApiResult.Success(
-                            TelemetryRequest(
-                                temperatureC = data.optDouble("temperature", 34.0),
-                                humidityPercent = data.optDouble("humidity", 60.0),
-                                weightKg = data.optDouble("weight", 30.0),
-                                soundLevel = data.optDouble("sound_level", 50.0),
-                                vibrationLevel = 0.5,
-                                batteryPercent = 95.0
-                            )
-                        )
-                    }
-                }
-            } catch (ignored: Exception) {
-                // Fallthrough
-            }
-
-            // 3. Third Priority: REST endpoints
-            val candidateEndpoints = listOf(
-                "$baseUrl/api/v1/hive/$numericId",
-                "$baseUrl/api/v1/hives/$numericId",
-                "$baseUrl/api/telemetry",
-                "$baseUrl/telemetry"
-            )
-            for (endpoint in candidateEndpoints) {
-                try {
-                    val req = okhttp3.Request.Builder().url(endpoint).get().build()
-                    val resp = iotClient.newCall(req).execute()
-                    if (resp.isSuccessful) {
-                        val body = resp.body?.string().orEmpty()
-                        val json = org.json.JSONObject(body)
-                        val targetJson = json.optJSONObject("data") ?: json
-                        return@withContext ApiResult.Success(
-                            TelemetryRequest(
-                                temperatureC = targetJson.optDouble("temperature_c", targetJson.optDouble("temperature", 34.8)),
-                                humidityPercent = targetJson.optDouble("humidity_pct", targetJson.optDouble("humidity", 58.0)),
-                                weightKg = targetJson.optDouble("weight_kg", targetJson.optDouble("weight", 30.2)),
-                                soundLevel = targetJson.optDouble("sound_level_db", targetJson.optDouble("sound_level", 48.0)),
-                                vibrationLevel = 0.5,
-                                batteryPercent = 95.0
-                            )
-                        )
-                    }
-                } catch (ignored: Exception) {
-                }
-            }
-
-            ApiResult.Error(-1, "Unable to read telemetry for Hive $hiveId from IoT Server at $url")
+            ApiResult.Error(-1, "Unable to read live telemetry for Hive $hiveId from IoT Server at $url")
         } catch (e: Exception) {
             ApiResult.Error(-1, "Connection error with IoT Server at $url: ${e.localizedMessage}")
         }

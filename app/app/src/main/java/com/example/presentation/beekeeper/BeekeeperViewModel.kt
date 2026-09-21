@@ -46,7 +46,7 @@ data class BeekeeperUiState(
     val isExternalIotConnected: Boolean = false,
     val externalIotStatus: String? = null,
     val isAutoStreaming: Boolean = false,
-    val streamIntervalMs: Long = 2000L,
+    val streamIntervalMs: Long = 5000L,
     val streamPacketCount: Int = 0,
     val selectedScenario: String = "HEALTHY",
     val currentTemp: Double = 34.8,
@@ -69,7 +69,7 @@ class BeekeeperViewModel(
     private val webSocketManager: com.example.core.network.WebSocketManager
 ) : ViewModel() {
 
-    private val geminiChatService = com.example.domain.ai.GeminiChatService()
+    // AI assistant is handled by the backend (Gemini runs server-side).
 
     private val _uiState = MutableStateFlow(BeekeeperUiState())
     val uiState: StateFlow<BeekeeperUiState> = _uiState.asStateFlow()
@@ -643,7 +643,7 @@ class BeekeeperViewModel(
         }
     }
 
-    fun startAutoStreaming(hiveId: String, intervalMs: Long = 2000L) {
+    fun startAutoStreaming(hiveId: String, intervalMs: Long = 5000L) {
         stopAutoStreaming()
         _uiState.value = _uiState.value.copy(
             isAutoStreaming = true,
@@ -678,29 +678,10 @@ class BeekeeperViewModel(
                         soundDb = t.soundLevelDb ?: 48.0,
                         co2Ppm = t.co2Ppm ?: 650.0
                     )
-                } else {
-                    val jitterTemp = (_uiState.value.currentTemp + ((-5..5).random() * 0.1)).coerceIn(15.0, 48.0)
-                    val jitterHum = (_uiState.value.currentHumidity + ((-10..10).random() * 0.2)).coerceIn(20.0, 99.0)
-                    val jitterWeight = (_uiState.value.currentWeight + ((-2..2).random() * 0.05)).coerceIn(5.0, 60.0)
-                    val jitterSound = (_uiState.value.currentSoundDb + ((-15..15).random() * 0.2)).coerceIn(10.0, 110.0)
-                    val jitterCo2 = (_uiState.value.currentCo2Ppm + ((-20..20).random() * 2.0)).coerceIn(300.0, 2500.0)
-
+                } else if (extRes is ApiResult.Error) {
                     _uiState.value = _uiState.value.copy(
-                        currentTemp = Math.round(jitterTemp * 10.0) / 10.0,
-                        currentHumidity = Math.round(jitterHum * 10.0) / 10.0,
-                        currentWeight = Math.round(jitterWeight * 100.0) / 100.0,
-                        currentSoundDb = Math.round(jitterSound * 10.0) / 10.0,
-                        currentCo2Ppm = Math.round(jitterCo2).toDouble(),
-                        streamPacketCount = _uiState.value.streamPacketCount + 1
-                    )
-
-                    submitTelemetry(
-                        hiveId = targetHive,
-                        temp = _uiState.value.currentTemp,
-                        humidity = _uiState.value.currentHumidity,
-                        weight = _uiState.value.currentWeight,
-                        soundDb = _uiState.value.currentSoundDb,
-                        co2Ppm = _uiState.value.currentCo2Ppm
+                        isExternalIotConnected = false,
+                        externalIotStatus = "Connecting to IoT Server: ${extRes.message}"
                     )
                 }
 
@@ -761,23 +742,93 @@ class BeekeeperViewModel(
         }
     }
 
+    /**
+     * Send a question to the backend AI assistant (which calls Gemini server-side).
+     * The hive ID is included so the backend can contextualise the response with
+     * live telemetry data.
+     */
     fun askAssistant(question: String) {
         if (question.isBlank()) return
-        
+        val hiveId = _uiState.value.selectedHive?.id ?: return
+
         viewModelScope.launch {
-            // Add user message to UI immediately
+            // Optimistically append the user message to the UI.
             val userMsg = ChatMessage(role = "user", text = question)
             val currentMessages = _uiState.value.chatMessages.toMutableList()
             currentMessages.add(userMsg)
-            _uiState.value = _uiState.value.copy(chatMessages = currentMessages, isAskingAssistant = true)
+            _uiState.value = _uiState.value.copy(
+                chatMessages = currentMessages,
+                isAskingAssistant = true
+            )
 
-            // Send to Gemini
-            val response = geminiChatService.sendMessage(question)
-            
-            // Add model response
-            val modelMsg = ChatMessage(role = "model", text = response)
-            currentMessages.add(modelMsg)
-            _uiState.value = _uiState.value.copy(chatMessages = currentMessages, isAskingAssistant = false)
+            // Route through the backend: POST /beekeeper/hives/{hive_id}/assistant
+            // The backend securely calls Gemini and returns a structured response.
+            when (val res = beekeeperRepository.askAssistant(hiveId, question)) {
+                is ApiResult.Success -> {
+                    val dto = res.data
+                    // Build a human-readable reply from the structured backend response.
+                    val reply = buildString {
+                        if (!dto.conditionSummary.isNullOrBlank()) {
+                            append(dto.conditionSummary)
+                            append("\n")
+                        }
+                        if (!dto.explanation.isNullOrBlank()) {
+                            append(dto.explanation)
+                            append("\n")
+                        }
+                        if (dto.answer.isNotBlank() &&
+                            dto.answer != "Hive conditions are currently optimal.") {
+                            if (isNotEmpty()) append("\n")
+                            append(dto.answer)
+                        }
+                        if (dto.recommendedSteps.isNotEmpty()) {
+                            append("\n\nRecommended steps:")
+                            dto.recommendedSteps.forEachIndexed { i, step ->
+                                append("\n${i + 1}. $step")
+                            }
+                        }
+                        if (dto.recommendations.isNotEmpty()) {
+                            append("\n\nAdditional recommendations:")
+                            dto.recommendations.forEach { rec ->
+                                append("\n• $rec")
+                            }
+                        }
+                        if (!dto.disclaimer.isNullOrBlank()) {
+                            append("\n\n_${dto.disclaimer}_")
+                        }
+                        if (isEmpty()) append(dto.answer)
+                    }.trim()
+
+                    val modelMsg = ChatMessage(role = "model", text = reply)
+                    currentMessages.add(modelMsg)
+                    _uiState.value = _uiState.value.copy(
+                        chatMessages = currentMessages,
+                        isAskingAssistant = false
+                    )
+                    android.util.Log.d(
+                        "BeekeeperVM",
+                        "Assistant response received from backend (provider=${dto.provider}, mock=${dto.isMock})"
+                    )
+                }
+                is ApiResult.Error -> {
+                    android.util.Log.e(
+                        "BeekeeperVM",
+                        "Assistant request failed: code=${res.code} message=${res.message}"
+                    )
+                    val errorMsg = ChatMessage(
+                        role = "model",
+                        text = "⚠️ Unable to reach the AI assistant: ${res.message}"
+                    )
+                    currentMessages.add(errorMsg)
+                    _uiState.value = _uiState.value.copy(
+                        chatMessages = currentMessages,
+                        isAskingAssistant = false
+                    )
+                }
+                else -> {
+                    _uiState.value = _uiState.value.copy(isAskingAssistant = false)
+                }
+            }
         }
     }
 
@@ -786,17 +837,20 @@ class BeekeeperViewModel(
         val health = _uiState.value.hiveHealth
         val prompt = if (health != null) {
             "Analyze this current telemetry for Hive ${hive?.hiveCode ?: "Unknown"}: " +
-            "Temp: ${health.temperatureC}°C, Humidity: ${health.humidityPct}%, " +
-            "Weight: ${health.weightKg}kg, Sound: ${health.soundLevelDb}dB. " +
-            "Provide a short diagnostic summary and any recommended actions."
+                "Temp: ${health.temperatureC}°C, Humidity: ${health.humidityPct}%, " +
+                "Weight: ${health.weightKg}kg, Sound: ${health.soundLevelDb}dB. " +
+                "Provide a short diagnostic summary and any recommended actions."
         } else {
-            "Analyze the telemetry for Hive ${hive?.hiveCode ?: "Unknown"}. Currently, temp is ${_uiState.value.currentTemp}°C, humidity is ${_uiState.value.currentHumidity}%, weight is ${_uiState.value.currentWeight}kg, and sound is ${_uiState.value.currentSoundDb}dB. Provide a concise diagnostic summary."
+            "Analyze the telemetry for Hive ${hive?.hiveCode ?: "Unknown"}. " +
+                "Temp: ${_uiState.value.currentTemp}°C, Humidity: ${_uiState.value.currentHumidity}%, " +
+                "Weight: ${_uiState.value.currentWeight}kg, Sound: ${_uiState.value.currentSoundDb}dB. " +
+                "Provide a concise diagnostic summary."
         }
         askAssistant(prompt)
     }
 
     fun clearChatHistory() {
-        geminiChatService.resetChat()
+        // No client-side chat session to reset – history is local to this ViewModel instance.
         _uiState.value = _uiState.value.copy(chatMessages = emptyList())
     }
 
