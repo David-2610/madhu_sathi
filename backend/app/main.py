@@ -160,6 +160,7 @@ app.include_router(bridge_router.router)
 async def api_root() -> dict[str, str]:
     """Root status endpoint providing basic metadata and documentation links."""
     return {
+        "message": "Server is running",
         "status": "online",
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
