@@ -319,6 +319,15 @@ class BeekeeperRepository(
                 serialNumber = serial
             )
             val result = apiService.createProduct(batchId, request)
+            // Persist price via listing endpoint (non-blocking — does not affect product creation)
+            if (price > 0) {
+                try {
+                    apiService.updateProductListing(
+                        result.id,
+                        UpdateListingRequest(price = price, isListed = false, currency = "INR")
+                    )
+                } catch (_: Exception) { /* Non-critical */ }
+            }
             ApiResult.Success(result)
         } catch (e: Exception) {
             NetworkErrorMapper.map(e)

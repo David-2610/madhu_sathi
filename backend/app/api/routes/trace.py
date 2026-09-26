@@ -91,6 +91,7 @@ def get_public_trace(
 
     return PublicTraceResponse(
         serial_number=product.serial_number,
+        trace_token=product.trace_token,
         status=product.status,
         is_valid=(product.status == ProductStatus.ACTIVE),
         revocation_notice=revocation_notice,
@@ -124,6 +125,7 @@ def get_public_trace(
             verification_status=verification_status,
         ),
     )
+
 
 
 @router.get(

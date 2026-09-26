@@ -58,7 +58,12 @@ class HoneyProductResponse(BaseModel):
     status: ProductStatus
     trace_url: Optional[str] = None
     qr_code_svg: Optional[str] = None
+    # Commerce / marketplace fields
+    price: Optional[float] = None
+    currency: str = "INR"
+    is_listed: bool = False
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+

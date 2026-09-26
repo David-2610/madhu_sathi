@@ -12,9 +12,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
+import com.example.BuildConfig
 import com.example.core.ui.*
 import com.example.data.remote.dto.*
 
@@ -622,30 +628,103 @@ private fun ProductQrDialog(
     qrResponse: QrResponseDto?,
     onDismiss: () -> Unit
 ) {
+    // Use the public /trace/{trace_token}/qr endpoint — no auth required
+    val baseUrl = BuildConfig.BACKEND_BASE_URL.trimEnd('/')
+    val traceToken = product.traceToken
+    val qrImageUrl = "$baseUrl/trace/$traceToken/qr"
+    val tracePageUrl = "$baseUrl/trace/$traceToken"
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Digital Passport QR") },
+        title = { Text("Digital Passport QR Code") },
         text = {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(
-                    imageVector = Icons.Default.QrCode2,
-                    contentDescription = "QR Code",
-                    modifier = Modifier.size(160.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
+                // Real QR image loaded from backend via Coil
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    modifier = Modifier.size(200.dp)
+                ) {
+                    SubcomposeAsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(qrImageUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "QR Code for ${product.traceToken}",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(8.dp),
+                        loading = {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(32.dp),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        },
+                        error = {
+                            // Fallback: show a large QR icon with the token text
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.QrCode2,
+                                    contentDescription = "QR Code",
+                                    modifier = Modifier.size(80.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = "Tap to retry",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    )
+                }
+
+                // Trace token label
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "Trace Token",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            text = traceToken,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
                 Text(
-                    text = "Token: ${product.traceToken}",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "This token is etched onto the jar security seal. Buyers can scan or input this token to inspect the full immutable harvest timeline.",
+                    text = "Print or display this QR on the jar seal. Buyers scan it to verify the complete harvest origin and authenticity chain.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
                 )
             }
         },
@@ -654,3 +733,4 @@ private fun ProductQrDialog(
         }
     )
 }
+

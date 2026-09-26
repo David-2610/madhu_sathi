@@ -49,7 +49,9 @@ class PublicTimelineEventResponse(BaseModel):
     """
 
     event_type: TraceEventType
+    event_title: Optional[str] = None  # Human-readable title, derived from event_type if not set
     event_date: datetime
+    timestamp: Optional[datetime] = None  # Alias for event_date for Android DTO compatibility
     description: str
     location: Optional[str] = None
     event_hash: str
@@ -58,6 +60,17 @@ class PublicTimelineEventResponse(BaseModel):
     metadata_payload: Optional[str] = None
 
     model_config = {"from_attributes": True}
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.event_title is None:
+            object.__setattr__(
+                self,
+                "event_title",
+                self.event_type.value.replace("_", " ").title()
+            )
+        if self.timestamp is None:
+            object.__setattr__(self, "timestamp", self.event_date)
+
 
 
 class SafeBatchInfo(BaseModel):
@@ -97,6 +110,7 @@ class PublicTraceResponse(BaseModel):
     """
 
     serial_number: str
+    trace_token: Optional[str] = None
     status: ProductStatus
     is_valid: bool
     revocation_notice: Optional[str] = None
@@ -113,3 +127,4 @@ class PublicTraceResponse(BaseModel):
 
     timeline: List[PublicTimelineEventResponse]
     blockchain_verification: BlockchainVerificationInfo
+

@@ -14,11 +14,17 @@ import qrcode.image.svg
 
 
 def generate_qr_svg(content: str) -> str:
-    """Generate an SVG vector string encoding *content*."""
+    """Generate an SVG vector string encoding *content*.
+
+    Uses high error correction (H = 30%) and auto-fits the QR version
+    so that long trace URLs are always encoded correctly.
+    """
     factory = qrcode.image.svg.SvgPathImage
     qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        # version=None lets the library auto-select the smallest version
+        # that fits the content — critical for 43+ char trace tokens
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
         box_size=10,
         border=4,
         image_factory=factory,
@@ -31,11 +37,14 @@ def generate_qr_svg(content: str) -> str:
     return stream.getvalue().decode("utf-8")
 
 
-def generate_qr_png_bytes(content: str, box_size: int = 10, border: int = 4) -> bytes:
-    """Generate raw PNG bytes encoding *content*."""
+def generate_qr_png_bytes(content: str, box_size: int = 8, border: int = 4) -> bytes:
+    """Generate raw PNG bytes encoding *content*.
+
+    Uses high error correction and auto-selected version for reliable scanning.
+    """
     qr = qrcode.QRCode(
-        version=1,
-        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        version=None,  # Auto-select version
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
         box_size=box_size,
         border=border,
     )
@@ -58,3 +67,4 @@ def build_trace_url(base_url: str, trace_token: str) -> str:
     """Construct a full canonical trace URL using *base_url* and *trace_token*."""
     clean_base = base_url.rstrip("/")
     return f"{clean_base}/trace/{trace_token}"
+

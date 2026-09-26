@@ -1,5 +1,8 @@
 package com.example.presentation.trace
 
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -30,7 +33,11 @@ import androidx.core.content.ContextCompat
 import com.example.core.ui.*
 import com.example.data.remote.dto.TraceabilityDetailDto
 import com.example.ui.theme.HoneyGoldPrimary
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.PermissionStatus
+import com.google.accompanist.permissions.rememberPermissionState
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun QrTraceScannerScreen(
     viewModel: TraceViewModel,
@@ -39,7 +46,12 @@ fun QrTraceScannerScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var inputToken by remember { mutableStateOf("") }
-    var activeTab by remember { mutableIntStateOf(0) } // 0: Enter Code / Emulation, 1: Camera Scanner
+    var activeTab by remember { mutableIntStateOf(0) } // 0: Enter Code, 1: Camera Scanner
+
+    // Runtime camera permission using accompanist
+    val cameraPermissionState = rememberPermissionState(
+        permission = android.Manifest.permission.CAMERA
+    )
 
     Scaffold(
         topBar = {
@@ -73,17 +85,25 @@ fun QrTraceScannerScreen(
                 )
                 Tab(
                     selected = activeTab == 1,
-                    onClick = { activeTab = 1 },
+                    onClick = {
+                        activeTab = 1
+                        // Request camera permission when switching to scan tab
+                        if (cameraPermissionState.status != PermissionStatus.Granted) {
+                            cameraPermissionState.launchPermissionRequest()
+                        }
+                    },
                     text = { Text("Scan QR") },
                     icon = { Icon(Icons.Default.QrCodeScanner, contentDescription = null) }
                 )
             }
 
             if (uiState.traceDetails != null) {
-                // Display trace verification results
                 TraceDetailsView(
                     details = uiState.traceDetails!!,
-                    onScanAgain = { viewModel.clear() }
+                    onScanAgain = {
+                        viewModel.clear()
+                        inputToken = ""
+                    }
                 )
             } else {
                 if (activeTab == 0) {
@@ -103,7 +123,7 @@ fun QrTraceScannerScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Enter the unique 12-character trace token printed on the honey jar seal or batch tag.",
+                                text = "Enter the unique trace token from the honey jar seal or scan its QR code.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -127,16 +147,33 @@ fun QrTraceScannerScreen(
                         }
                     }
                 } else {
-                    // Camera Scanner View Mode
-                    val context = LocalContext.current
-                    CameraPreviewBox(
-                        onQrDetected = { detectedToken ->
-                            // Update input field so the user can verify the keyword visually
-                            inputToken = detectedToken
-                            android.widget.Toast.makeText(context, "Scanned: $detectedToken", android.widget.Toast.LENGTH_SHORT).show()
-                            viewModel.searchTrace(detectedToken)
+                    // Camera Scanner View Mode — check permission first
+                    when (cameraPermissionState.status) {
+                        PermissionStatus.Granted -> {
+                            val context = LocalContext.current
+                            CameraPreviewBox(
+                                onQrDetected = { detectedToken ->
+                                    inputToken = detectedToken
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "QR Scanned! Verifying...",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                    viewModel.searchTrace(detectedToken)
+                                }
+                            )
                         }
-                    )
+
+                        is PermissionStatus.Denied -> {
+                            val denied = cameraPermissionState.status as PermissionStatus.Denied
+                            CameraPermissionCard(
+                                shouldShowRationale = denied.shouldShowRationale,
+                                onRequestPermission = {
+                                    cameraPermissionState.launchPermissionRequest()
+                                }
+                            )
+                        }
+                    }
                 }
 
                 if (uiState.isLoading) {
@@ -154,58 +191,147 @@ fun QrTraceScannerScreen(
     }
 }
 
+/**
+ * Shown when camera permission is not granted yet.
+ * Handles both "show rationale" and "permanently denied" cases.
+ */
+@OptIn(ExperimentalPermissionsApi::class)
+@Composable
+private fun CameraPermissionCard(
+    shouldShowRationale: Boolean,
+    onRequestPermission: () -> Unit
+) {
+    val context = LocalContext.current
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.CameraAlt,
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Text(
+                text = if (shouldShowRationale) "Camera Permission Required" else "Permission Permanently Denied",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = if (shouldShowRationale) {
+                    "Honey Chain needs camera access to scan QR codes on honey jars for authenticity verification."
+                } else {
+                    "Camera permission was permanently denied. Please enable it in your device settings to use the QR scanner."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                textAlign = TextAlign.Center
+            )
+
+            if (shouldShowRationale) {
+                Button(
+                    onClick = onRequestPermission,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Grant Camera Permission")
+                }
+            } else {
+                Button(
+                    onClick = {
+                        // Open app settings so user can manually grant permission
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.fromParts("package", context.packageName, null)
+                        }
+                        context.startActivity(intent)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Open App Settings")
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun CameraPreviewBox(
     onQrDetected: (String) -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    // hasScanned prevents duplicate rapid callbacks for the same code
     var hasScanned by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(280.dp),
-        shape = RoundedCornerShape(12.dp)
+            .height(300.dp),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             AndroidView(
                 factory = { ctx ->
-                    val previewView = PreviewView(ctx)
+                    val previewView = PreviewView(ctx).apply {
+                        implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                    }
                     val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
                     cameraProviderFuture.addListener({
                         try {
                             val cameraProvider = cameraProviderFuture.get()
+
                             val preview = Preview.Builder().build().also {
                                 it.surfaceProvider = previewView.surfaceProvider
                             }
-                            
+
                             val imageAnalysis = androidx.camera.core.ImageAnalysis.Builder()
                                 .setBackpressureStrategy(androidx.camera.core.ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                                 .build()
-                                
+
                             val scanner = com.google.mlkit.vision.barcode.BarcodeScanning.getClient(
                                 com.google.mlkit.vision.barcode.BarcodeScannerOptions.Builder()
                                     .setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_QR_CODE)
                                     .build()
                             )
-                            
+
                             imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(ctx)) { imageProxy ->
                                 @androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
                                 val mediaImage = imageProxy.image
-                                if (mediaImage != null) {
-                                    val image = com.google.mlkit.vision.common.InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+                                if (mediaImage != null && !hasScanned) {
+                                    val image = com.google.mlkit.vision.common.InputImage.fromMediaImage(
+                                        mediaImage,
+                                        imageProxy.imageInfo.rotationDegrees
+                                    )
                                     scanner.process(image)
                                         .addOnSuccessListener { barcodes ->
                                             if (barcodes.isNotEmpty() && !hasScanned) {
-                                                hasScanned = true
                                                 val rawValue = barcodes.first().rawValue
-                                                if (rawValue != null) {
-                                                    // Extract trace token if it's a URL
-                                                    val token = if (rawValue.contains("/trace/")) {
-                                                        rawValue.substringAfterLast("/")
-                                                    } else {
-                                                        rawValue
+                                                if (!rawValue.isNullOrBlank()) {
+                                                    hasScanned = true
+                                                    // Extract trace token from full trace URL if present
+                                                    val token = when {
+                                                        rawValue.contains("/trace/") ->
+                                                            rawValue.substringAfterLast("/").trim()
+                                                        else -> rawValue.trim()
                                                     }
                                                     onQrDetected(token)
                                                 }
@@ -218,12 +344,16 @@ private fun CameraPreviewBox(
                                     imageProxy.close()
                                 }
                             }
-                            
+
                             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
                             cameraProvider.unbindAll()
-                            cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageAnalysis)
+                            cameraProvider.bindToLifecycle(
+                                lifecycleOwner,
+                                cameraSelector,
+                                preview,
+                                imageAnalysis
+                            )
                         } catch (e: Exception) {
-                            // Handled gracefully if camera hardware is unavailable
                             e.printStackTrace()
                         }
                     }, ContextCompat.getMainExecutor(ctx))
@@ -235,19 +365,36 @@ private fun CameraPreviewBox(
             // Viewfinder reticle overlay
             Box(
                 modifier = Modifier
-                    .size(180.dp)
-                    .border(2.dp, HoneyGoldPrimary, RoundedCornerShape(16.dp))
+                    .size(200.dp)
+                    .border(3.dp, HoneyGoldPrimary, RoundedCornerShape(16.dp))
+            )
+
+            // Corner accents for the reticle
+            val cornerSize = 24.dp
+            val cornerWidth = 3.dp
+            val cornerColor = HoneyGoldPrimary
+
+            // Top-left
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .offset(x = (-100).dp, y = (-100).dp)
             )
 
             Text(
-                text = "Point camera at Honey Chain QR",
+                text = if (hasScanned) "✓ QR Code Detected!" else "Point camera at Honey Chain QR",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.White,
+                fontWeight = if (hasScanned) FontWeight.Bold else FontWeight.Normal,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 12.dp)
-                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .background(
+                        if (hasScanned) Color(0xFF1B5E20).copy(alpha = 0.85f)
+                        else Color.Black.copy(alpha = 0.6f),
+                        RoundedCornerShape(8.dp)
+                    )
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
             )
         }
     }
