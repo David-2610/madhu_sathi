@@ -1,6 +1,6 @@
 # Honey Chain (Madhu Sathi) – Android Application
 
-Honey Chain (Madhu Sathi) is a smart beekeeping, honey traceability, and direct-to-consumer marketplace platform designed for rural tech empowerment, pure honey authentication, and transparent supply chain integrity.
+Honey Chain (Madhu Sathi) is a smart beekeeping, honey traceability, and direct-to-consumer marketplace platform designed for rural tech empowerment, pure honey authentication, and transparent supply chain integrity.XX
 
 ## Core Features
 
